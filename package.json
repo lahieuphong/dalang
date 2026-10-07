@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "An interactive Wayang Kulit shadow-puppet theater controlled by your two hands.",
   "type": "module",
+  "packageManager": "yarn@1.22.22",
   "scripts": {
     "setup:mediapipe": "node scripts/setup-mediapipe.mjs",
     "predev": "node scripts/setup-mediapipe.mjs",

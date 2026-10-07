@@ -8,14 +8,16 @@ Everything runs locally in the browser. No server, and the video never leaves th
 
 ## Run it
 
+This project uses [Yarn](https://classic.yarnpkg.com/) 1.x.
+
 ```bash
-npm install
-npm run dev        # http://localhost:5173
-npm run build      # type-check + production build into dist/
-npm run preview    # serve the production build
+yarn install
+yarn dev        # http://localhost:5173
+yarn build      # type-check + production build into dist/
+yarn preview    # serve the production build
 ```
 
-`npm run dev` and `npm run build` first run `scripts/setup-mediapipe.mjs`. It
+`yarn dev` and `yarn build` first run `scripts/setup-mediapipe.mjs`. It
 copies the MediaPipe WASM runtime from `node_modules` into `public/mediapipe/wasm`
 and downloads `public/models/hand_landmarker.task` if it is missing.
 

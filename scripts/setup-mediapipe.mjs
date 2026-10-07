@@ -15,7 +15,7 @@ const modelUrl =
 
 function copyWasm() {
   if (!existsSync(wasmSource)) {
-    console.warn('[mediapipe] @mediapipe/tasks-vision is not installed; run npm install first.');
+    console.warn('[mediapipe] @mediapipe/tasks-vision is not installed; run yarn install first.');
     return;
   }
   mkdirSync(wasmTarget, { recursive: true });
