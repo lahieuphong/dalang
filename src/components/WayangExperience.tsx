@@ -275,7 +275,8 @@ export function WayangExperience() {
 const BAR_WIDTH = 14;
 const bar = (value: number) => {
   const filled = Math.round(Math.min(1, Math.max(0, value)) * BAR_WIDTH);
-  return '█'.repeat(filled) + '░'.repeat(BAR_WIDTH - filled);
+  // Plain ASCII: block glyphs come from a fallback font that overflows the line box.
+  return '[' + '#'.repeat(filled) + '-'.repeat(BAR_WIDTH - filled) + ']';
 };
 
 /**

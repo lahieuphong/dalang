@@ -108,11 +108,12 @@ const wave = (t: number, speed: number, phase = 0) => Math.sin(t * speed + phase
 
 function scriptedPose(side: Side, t: number): HandPose {
   const p = side === 'left' ? 0 : 1.7;
-  const baseX = side === 'left' ? 0.32 : 0.68;
+  // Each hand wanders around its own side of the view and now and then drifts toward the other.
+  const baseX = side === 'left' ? 0.29 : 0.71;
   // Each finger has its own rhythm, like drumming, and the thumb periodically pinches the index.
   const finger = (speed: number, phase: number) => 0.55 + 0.45 * wave(t, speed, p + phase);
   return {
-    x: baseX + 0.13 * wave(t, 0.55, p) + (side === 'left' ? 0.06 : -0.06) * Math.max(0, wave(t, 0.3, 2)),
+    x: baseX + 0.07 * wave(t, 0.55, p) + (side === 'left' ? 0.04 : -0.04) * Math.max(0, wave(t, 0.3, 2)),
     y: 0.56 + 0.14 * wave(t, 0.83, p + 0.5),
     tilt: 14 * wave(t, 0.7, p),
     size: 0.17 + 0.03 * wave(t, 0.4, p),
