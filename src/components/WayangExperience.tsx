@@ -30,7 +30,8 @@ interface Engine {
   assigned: AssignedHands;
   frame: HandFrame | null;
   frameAt: number;
-  handCount: { reported: number; pending: number; since: number };
+  /** Which puppets are held, as "lr", "l-", "-r" or "--"; reported to React once it settles. */
+  held: { reported: string; pending: string; since: number };
 }
 
 function createEngine(simulate: boolean): Engine {
@@ -41,7 +42,7 @@ function createEngine(simulate: boolean): Engine {
     assigned: { left: null, right: null },
     frame: null,
     frameAt: -Infinity,
-    handCount: { reported: 0, pending: 0, since: 0 },
+    held: { reported: '--', pending: '--', since: 0 },
   };
 }
 
@@ -49,7 +50,7 @@ function createEngine(simulate: boolean): Engine {
 const lampFlicker = (t: number) => 0.6 * Math.sin(t * 7.3) * Math.sin(t * 1.7) + 0.4 * Math.sin(t * 12.9 + 1);
 
 const OVERLAY_STALE_MS = 500;
-const HAND_COUNT_SETTLE_MS = 250;
+const HELD_SETTLE_MS = 250;
 
 export function WayangExperience() {
   const flags = useMemo(readDebugFlags, []);
@@ -58,7 +59,7 @@ export function WayangExperience() {
   const reducedMotion = useReducedMotion();
   const cameraLive = camera.status === 'requesting' || camera.status === 'active';
   const tracking = useHandTracking(!flags.simulate && cameraLive);
-  const [handCount, setHandCount] = useState(0);
+  const [held, setHeld] = useState<Record<Side, boolean>>({ left: false, right: false });
   const [soundOn, setSoundOn] = useState(false);
 
   const sceneRef = useRef<StageSceneHandle>(null);
@@ -164,15 +165,15 @@ export function WayangExperience() {
       sceneRef.current?.applyRig(side, engine.puppets[side].integrate(dt, settings), flicker, dt);
     }
 
-    // Tell React how many puppets are held only once the number settles.
-    const engaged = SIDES.filter((side) => engine.puppets[side].isTracking(now)).length;
-    const count = engine.handCount;
-    if (engaged !== count.pending) {
-      count.pending = engaged;
-      count.since = now;
-    } else if (engaged !== count.reported && now - count.since > HAND_COUNT_SETTLE_MS) {
-      count.reported = engaged;
-      setHandCount(engaged);
+    // Tell React which puppets are held only once that settles.
+    const heldKey = SIDES.map((side) => (engine.puppets[side].isTracking(now) ? side[0] : '-')).join('');
+    const report = engine.held;
+    if (heldKey !== report.pending) {
+      report.pending = heldKey;
+      report.since = now;
+    } else if (heldKey !== report.reported && now - report.since > HELD_SETTLE_MS) {
+      report.reported = heldKey;
+      setHeld({ left: heldKey[0] === 'l', right: heldKey[1] === 'r' });
     }
 
     if (flags.debug) {
@@ -185,7 +186,7 @@ export function WayangExperience() {
   const status = stageStatus({
     camera: camera.status,
     tracking: tracking.status,
-    hands: handCount,
+    hands: Number(held.left) + Number(held.right),
     cameraEnabled: settings.cameraEnabled,
     simulated: flags.simulate,
   });
@@ -213,6 +214,8 @@ export function WayangExperience() {
           overlayRef={overlayRef}
           status={camera.status}
           mirror={settings.mirror}
+          live={camera.status === 'active' || flags.simulate}
+          held={held}
           cameraEnabled={settings.cameraEnabled}
           onEnable={enableCamera}
           simulated={flags.simulate}

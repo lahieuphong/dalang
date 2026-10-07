@@ -27,17 +27,18 @@
 
   /*
    * Composition. The stage width is derived from the viewport height so that
-   * the theatre plus the webcam card (42% of the stage, at most 340px) fit:
-   * the first term applies while the card scales with the stage, the second
-   * once the card has reached its maximum size.
+   * the theatre plus the framed webcam (56% of the stage width, at most 480px)
+   * fit: the first term applies while the camera scales with the stage, the
+   * second once it has reached its maximum size.
    */
-  --stage-w: min(94vw, 1060px, max(320px, calc((100vh - 40px) / 1.096), calc((100vh - 231px) * 1.163)));
+  --stage-w: min(94vw, 1060px, max(320px, calc((100vh - 72px) / 1.179), calc((100vh - 342px) * 1.157)));
   --frame: clamp(7px, calc(var(--stage-w) * 0.0135), 14px);
   --stage-radius: clamp(14px, calc(var(--stage-w) * 0.022), 22px);
   --control-size: clamp(40px, calc(var(--stage-w) * 0.062), 46px);
   --pill-font: clamp(11.5px, calc(var(--stage-w) * 0.0165), 14px);
-  --cam-w: clamp(220px, calc(var(--stage-w) * 0.42), 340px);
-  --cam-tuck: 8px;
+  --cam-w: clamp(280px, calc(var(--stage-w) * 0.56), 480px);
+  --cam-pad: clamp(5px, calc(var(--cam-w) * 0.018), 8px);
+  --cam-gap: 14px;
 
   /* Pointer parallax, -1..1 (set by useParallax) */
   --par-x: 0;
@@ -56,7 +57,7 @@
 
 @supports (height: 100svh) {
   :root {
-    --stage-w: min(94vw, 1060px, max(320px, calc((100svh - 40px) / 1.096), calc((100svh - 231px) * 1.163)));
+    --stage-w: min(94vw, 1060px, max(320px, calc((100svh - 72px) / 1.179), calc((100svh - 342px) * 1.157)));
   }
 }
 
@@ -667,19 +668,65 @@ button {
 
 /* ---------------------------------------------------------------- Webcam */
 
-/* Tucked just under the theatre's lower edge, which overlaps it slightly. */
+/*
+ * A streamer-style camera frame in the theatre's own materials: carved wood
+ * with gilded hairlines and corners, a LIVE tag, a nameplate, and a warm glow
+ * that brightens as the puppets are taken up.
+ */
 .webcam {
   container: webcam / inline-size;
   position: relative;
   z-index: 1;
   width: var(--cam-w);
+  margin-top: var(--cam-gap);
+  padding: var(--cam-pad);
+  border-radius: clamp(14px, calc(var(--cam-w) * 0.05), 20px);
+  background:
+    url('../assets/textures/floral.svg') 0 0 / var(--cam-pad) var(--cam-pad) round,
+    linear-gradient(155deg, #5e2613 0%, #33130a 36%, #4c1d0d 64%, #240b05 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(232, 192, 118, 0.6),
+    inset 0 0 0 2.5px #2b0e06,
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 16px 36px rgba(0, 0, 0, 0.45);
+}
+
+/* The amber glow lives on its own layer so only its opacity animates. */
+.webcam::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  box-shadow: 0 0 34px 3px rgba(233, 169, 71, 0.55);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+
+.webcam--live::before {
+  opacity: 0.4;
+}
+
+.webcam--held-1::before {
+  opacity: 0.7;
+}
+
+.webcam--held-2::before {
+  opacity: 1;
+  animation: cam-glow 2.8s ease-in-out infinite alternate;
+}
+
+.webcam__viewport {
+  position: relative;
+  isolation: isolate;
   aspect-ratio: 16 / 9;
-  margin-top: calc(var(--cam-tuck) * -1);
   overflow: hidden;
-  border-radius: clamp(12px, calc(var(--cam-w) * 0.05), 16px);
+  border-radius: clamp(9px, calc(var(--cam-w) * 0.035), 14px);
   background: radial-gradient(ellipse at 50% 40%, #2b170c, #130905 76%);
-  border: 1px solid rgba(218, 182, 112, 0.26);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 0 0 1.5px #c9984c,
+    0 0 0 3px #2b0d06;
 }
 
 .webcam__video {
@@ -690,6 +737,8 @@ button {
   object-fit: cover;
   background: #130905;
   opacity: 0;
+  /* A touch of warmth so the feed sits in the lamp-lit palette. */
+  filter: saturate(1.05) sepia(0.1) contrast(1.03);
   transition: opacity 0.6s ease;
 }
 
@@ -697,7 +746,7 @@ button {
   transform: scaleX(-1);
 }
 
-.webcam--active .webcam__video {
+.webcam__video--on {
   opacity: 1;
 }
 
@@ -709,6 +758,126 @@ button {
   pointer-events: none;
 }
 
+.webcam__vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(20, 8, 3, 0.22), transparent 24%, transparent 72%, rgba(20, 8, 3, 0.32));
+  box-shadow: inset 0 0 calc(var(--cam-w) * 0.09) rgba(20, 8, 3, 0.5);
+}
+
+.webcam__live {
+  position: absolute;
+  top: clamp(6px, calc(var(--cam-w) * 0.025), 10px);
+  left: clamp(6px, calc(var(--cam-w) * 0.025), 10px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px 0 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f6e7c4;
+  background: rgba(20, 10, 6, 0.72);
+  border: 1px solid rgba(218, 182, 112, 0.35);
+}
+
+.webcam__live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e0523f;
+  box-shadow: 0 0 8px rgba(224, 82, 63, 0.8);
+  animation: live-blink 1.6s ease-in-out infinite;
+}
+
+.webcam__corner {
+  position: absolute;
+  z-index: 2;
+  width: clamp(26px, calc(var(--cam-w) * 0.085), 40px);
+  aspect-ratio: 1;
+  pointer-events: none;
+}
+
+.webcam__corner svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.webcam__corner--tl {
+  top: -3px;
+  left: -3px;
+}
+
+.webcam__corner--tr {
+  top: -3px;
+  right: -3px;
+  scale: -1 1;
+}
+
+.webcam__corner--bl {
+  bottom: -3px;
+  left: -3px;
+  scale: 1 -1;
+}
+
+.webcam__corner--br {
+  bottom: -3px;
+  right: -3px;
+  scale: -1 -1;
+}
+
+/* The nameplate straddles the bottom edge; its lamps light for the left and right puppet. */
+.webcam__plate {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 22px;
+  padding: 0 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #e8c378;
+  background: linear-gradient(180deg, #4e1e0e, #24100a);
+  border: 1px solid rgba(227, 184, 94, 0.7);
+  box-shadow:
+    0 4px 10px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 220, 160, 0.15);
+  transform: translate(-50%, 50%);
+}
+
+/* letter-spacing trails the last letter; balance it on the left. */
+.webcam__name {
+  padding-left: 0.3em;
+}
+
+.webcam__lamp {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5a3a22;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+  transition:
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.webcam__lamp--on {
+  background: #f2b24f;
+  box-shadow: 0 0 8px rgba(242, 178, 79, 0.85);
+}
+
 .webcam__prompt {
   position: absolute;
   inset: 0;
@@ -717,7 +886,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: calc(var(--cam-tuck) + 6px) 10px 10px;
+  padding: 10px;
   text-align: center;
   background: radial-gradient(ellipse at 50% 120%, rgba(200, 154, 72, 0.14), transparent 60%);
   animation: fade-in 0.4s ease both;
@@ -868,6 +1037,25 @@ button {
   }
 }
 
+@keyframes cam-glow {
+  from {
+    opacity: 0.75;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes live-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 @keyframes dot-breathe {
   from {
     opacity: 0.45;
@@ -919,8 +1107,8 @@ button {
     --stage-radius: clamp(14px, 4.2vw, 18px);
     --control-size: clamp(38px, 10vw, 40px);
     --pill-font: clamp(11px, 3vw, 12.5px);
-    --cam-w: clamp(190px, 58vw, 280px);
-    --cam-tuck: 6px;
+    --cam-w: clamp(240px, 84vw, 360px);
+    --cam-gap: 12px;
   }
 
   .clouds--tl,
@@ -952,12 +1140,12 @@ button {
 @media (max-height: 520px) and (orientation: landscape) {
   :root {
     --stage-w: min(94vw, max(340px, calc((100vh - 110px) * 1.163)));
-    --cam-w: clamp(190px, calc(var(--stage-w) * 0.42), 260px);
+    --cam-w: clamp(240px, calc(var(--stage-w) * 0.56), 320px);
   }
 }
 
 /* A small webcam card trims its prompt to the essentials. */
-@container webcam (max-width: 230px) {
+@container webcam (max-width: 250px) {
   .webcam__button {
     height: 32px;
     padding: 0 13px 0 11px;
@@ -975,7 +1163,9 @@ button {
   .scene__tassel,
   .status__dot,
   .status__line--in,
-  .status__line--out {
+  .status__line--out,
+  .webcam--held-2::before,
+  .webcam__live-dot {
     animation: none !important;
   }
 

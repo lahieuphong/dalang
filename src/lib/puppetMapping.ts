@@ -13,15 +13,22 @@ const HELD_Y = ON_RAIL_Y - 16;
 
 export const REST_X: Record<Side, number> = { left: 255, right: 745 };
 
-/** Each puppet keeps to its half but may reach past the centre to meet the other. */
-const X_RANGE: Record<Side, readonly [number, number]> = { left: [130, 580], right: [420, 870] };
+/** Each puppet keeps to its own half of the stage. */
+const X_RANGE: Record<Side, readonly [number, number]> = { left: [110, 450], right: [550, 890] };
+
+/**
+ * Hands naturally drift toward the middle of the camera frame, so each puppet
+ * is nudged this far toward its own side of the stage.
+ */
+const OUTWARD_BIAS = 50;
 
 /**
  * Closest the two puppets may come, measured at the grip and at the head
- * (which moves with the lean). Bodies and faces stay apart; hands can still meet.
+ * (which moves with the lean). Bodies and faces keep a clear gap; outstretched
+ * arms can still meet in the middle.
  */
-const MIN_GRIP_GAP = 225;
-const MIN_HEAD_GAP = 240;
+const MIN_GRIP_GAP = 290;
+const MIN_HEAD_GAP = 300;
 /** Distance from the lean pivot (knees) up to the face, in puppet units. */
 const HEAD_LEVER = PUPPET.leanY + 370;
 
@@ -118,7 +125,7 @@ export function rigFromHand(features: HandFeatures, side: Side, sensitivity: num
   const depth = normalize(features.size, 0.1, 0.3);
 
   return {
-    x: clamp(lerp(70, 930, u), minX, maxX),
+    x: clamp(lerp(70, 930, u) - f * OUTWARD_BIAS, minX, maxX),
     y: HELD_Y + lift,
     scale: PUPPET.scale * (1 + lerp(-0.03, 0.06, depth)),
     bodyRotation: lean,
