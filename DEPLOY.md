@@ -1,16 +1,10 @@
 # Deploy Dalang lên https://dalang.hongvan.net
 
-Dalang là website tĩnh: chỉ cần upload thư mục build, không cần Node.js hay database trên server.
+Dalang là website tĩnh: chỉ cần upload thư mục build, không cần Node.js hay
+database trên server. Server hiện tại của `dalang.hongvan.net` là **IIS
+(Windows)** và đã tự chuyển HTTP sang HTTPS.
 
-## 1. Yêu cầu bắt buộc
-
-- **HTTPS.** Trình duyệt chỉ cho dùng camera trên HTTPS. Hãy bật SSL cho
-  subdomain trước khi deploy (cPanel: *SSL/TLS Status → Run AutoSSL*, hoặc
-  Let's Encrypt).
-- Server phải trả file `.wasm` với MIME `application/wasm`. File `.htaccess` đi
-  kèm đã cấu hình sẵn việc này cho Apache/LiteSpeed.
-
-## 2. Build
+## 1. Build
 
 ```bash
 yarn install
@@ -22,48 +16,59 @@ nhận diện tay:
 
 ```
 dist/
-├── .htaccess              ← cấu hình server (file ẩn, KHÔNG được bỏ sót)
 ├── index.html
+├── web.config             ← cấu hình cho IIS (bắt buộc trên server hiện tại)
+├── .htaccess              ← cấu hình cho Apache/LiteSpeed (IIS bỏ qua file này)
 ├── favicon.svg, apple-touch-icon.png, og-image.jpg
 ├── assets/                ← JS/CSS có hash trong tên file
-│   └── .htaccess          ← cache dài hạn cho thư mục này
 ├── mediapipe/wasm/        ← runtime nhận diện tay
 └── models/hand_landmarker.task
 ```
 
-## 3. Upload (hosting dùng Apache hoặc LiteSpeed, như cPanel / DirectAdmin)
+## 2. Upload: mọi file phải nằm ở THƯ MỤC GỐC của website
 
-1. Tạo subdomain `dalang.hongvan.net` và ghi lại thư mục gốc (document root)
-   của nó, ví dụ `public_html/dalang.hongvan.net`.
-2. Upload **toàn bộ nội dung bên trong** `dist/` vào thư mục gốc đó. Không
-   upload chính thư mục `dist`: sau khi upload, `index.html` phải nằm ngay
-   trong thư mục gốc.
-3. Kiểm tra cả hai file ẩn `.htaccess` (ở gốc và trong `assets/`) đã lên
-   server. Trong File Manager của cPanel, bật *Settings → Show Hidden Files*
-   để thấy chúng.
+> **Lỗi hay gặp:** giải nén vào bên trong thư mục con (ví dụ đang đứng trong
+> `assets/` khi bấm Extract). Khi đó trang hiện nền đen trống: `index.html` cũ
+> ở gốc trỏ tới các file JS/CSS không còn tồn tại.
 
-Cách nhanh hơn: upload một file nén chứa nội dung `dist/`, rồi dùng
-*Extract* ngay trong File Manager.
+1. Mở File Manager của hosting và vào **thư mục gốc** của
+   `dalang.hongvan.net` (thường tên là `httpdocs`, `wwwroot` hoặc
+   `dalang.hongvan.net`). Đó là nơi chứa `index.html` hiện tại.
+2. **Xóa toàn bộ nội dung cũ** trong thư mục gốc: `index.html`, `assets/`,
+   `mediapipe/`, `models/`, các file ảnh, `.htaccess`, `web.config`…
+3. Vẫn đứng ở thư mục gốc, upload file nén rồi bấm **Extract** ngay tại đó.
+4. Sau khi giải nén, thư mục gốc phải có ngay `index.html`, `web.config` và
+   thư mục `assets/`. Nếu thấy `assets/assets/` hoặc
+   `dalang-production/index.html` thì nghĩa là đã giải nén sai chỗ.
 
-## 4. Kiểm tra sau khi deploy
+## 3. Kiểm tra sau khi deploy
 
-- [ ] `http://dalang.hongvan.net` tự chuyển sang `https://`.
-- [ ] Trang hiện sân khấu và hai con rối. Bấm **Enable camera**, cho phép camera, ô trạng thái hiện *Camera on · raise both hands*.
+- [ ] Mở `https://dalang.hongvan.net`: trang hiện sân khấu và hai con rối (nền nâu, không phải nền đen trống).
+- [ ] Bấm **Enable camera**, cho phép camera, ô trạng thái hiện *Camera on · raise both hands*.
 - [ ] Giơ hai tay lên: hai con rối được nâng lên và cử động.
-- [ ] DevTools → Network: file `vision_wasm_internal.wasm` có `Content-Type: application/wasm`.
-- [ ] DevTools → Console: không có lỗi *Content Security Policy*.
+- [ ] `https://dalang.hongvan.net/models/hand_landmarker.task` tải về được (không báo 404).
+- [ ] DevTools → Network: `vision_wasm_internal.wasm` có `Content-Type: application/wasm`.
+- [ ] DevTools → Console: không có lỗi đỏ.
 
-## 5. Cập nhật phiên bản mới
+Nếu trang chủ báo **500 Internal Server Error** ngay sau khi upload, hosting
+đang khóa một mục trong `web.config`. Thử xóa khối `<httpProtocol>` trước
+(header bảo mật); site vẫn chạy được, chỉ thiếu các header đó.
 
-Chạy lại `yarn build` rồi upload đè. `index.html` luôn được kiểm tra lại
-(`no-cache`), còn file trong `assets/` có hash trong tên, nên người xem nhận
-bản mới ngay mà không cần xóa cache.
+## 4. Cập nhật phiên bản mới
 
-## 6. Nếu server dùng Nginx
+Chạy lại `yarn build`, rồi lặp lại **bước 2**: xóa nội dung cũ, upload và
+giải nén ở thư mục gốc. `index.html` luôn được kiểm tra lại (`no-cache`),
+còn file trong `assets/` có hash trong tên, nên người xem nhận bản mới ngay.
 
-Nginx không đọc `.htaccess`, nên cần thêm cấu hình tương đương. Lưu ý:
-`add_header` trong một `location` sẽ thay thế các header ở cấp `server`, vì
-vậy các header bảo mật được tách ra một file riêng và `include` lại ở từng nơi.
+## 5. Nếu chuyển sang hosting khác
+
+- **Apache / LiteSpeed (cPanel, DirectAdmin):** dùng `.htaccess` có sẵn trong
+  build. Nó tự chuyển HTTPS, đặt MIME `.wasm`, nén file, thêm header bảo mật
+  và cache. Nhớ bật *Show Hidden Files* để thấy file này.
+- **Nginx:** không đọc `.htaccess` hay `web.config`, nên cần cấu hình tương
+  đương bên dưới. `add_header` trong một `location` sẽ thay thế các header ở
+  cấp `server`, vì vậy header bảo mật được tách ra một file riêng và
+  `include` lại ở từng nơi.
 
 `/etc/nginx/snippets/dalang-headers.conf`:
 
@@ -126,9 +131,5 @@ server {
 }
 ```
 
-## 7. Tùy chọn
-
-- Khi HTTPS đã chạy ổn định, có thể bật HSTS: bỏ dấu `#` ở dòng
-  `Strict-Transport-Security` trong `.htaccess`.
-- Ảnh chia sẻ khi dán link (Facebook, Zalo…) là `og-image.jpg`, đã trỏ sẵn tới
-  `https://dalang.hongvan.net/og-image.jpg`.
+Ảnh chia sẻ khi dán link (Facebook, Zalo…) là `og-image.jpg`, đã trỏ sẵn tới
+`https://dalang.hongvan.net/og-image.jpg`.
