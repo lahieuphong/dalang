@@ -1,0 +1,29 @@
+{
+  "name": "dalang",
+  "private": true,
+  "version": "1.0.0",
+  "description": "An interactive Wayang Kulit shadow-puppet theater controlled by your two hands.",
+  "type": "module",
+  "scripts": {
+    "setup:mediapipe": "node scripts/setup-mediapipe.mjs",
+    "predev": "node scripts/setup-mediapipe.mjs",
+    "dev": "vite",
+    "prebuild": "node scripts/setup-mediapipe.mjs",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "1.0.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.3"
+  }
+}
