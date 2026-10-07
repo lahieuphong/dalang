@@ -14,7 +14,10 @@ const HELD_Y = ON_RAIL_Y - 16;
 export const REST_X: Record<Side, number> = { left: 255, right: 745 };
 
 /** Each puppet keeps to its own half of the stage. */
-const X_RANGE: Record<Side, readonly [number, number]> = { left: [110, 450], right: [550, 890] };
+const X_RANGE: Record<Side, readonly [number, number]> = { left: [150, 470], right: [530, 850] };
+
+/** Grip positions that keep a whole puppet, back ornaments included, inside the frame. */
+const STAGE_BOUNDS = { min: 140, max: 860 } as const;
 
 /**
  * Hands naturally drift toward the middle of the camera frame, so each puppet
@@ -36,9 +39,9 @@ const HEAD_LEVER = PUPPET.leanY + 370;
  * Raising the hand above LIFT_START (normalized, after sensitivity) lifts the
  * held puppet further; dropping it low lets the puppet sink toward the rail.
  */
-const MAX_LIFT = 90;
-const MAX_SINK = 34;
-const LIFT_START = 0.5;
+const MAX_LIFT = 150;
+const MAX_SINK = 50;
+const LIFT_START = 0.58;
 
 export const RIG_KEYS = [
   'x',
@@ -108,33 +111,33 @@ export function rigFromHand(features: HandFeatures, side: Side, sensitivity: num
   const [minX, maxX] = X_RANGE[side];
 
   const lift =
-    v < LIFT_START ? -MAX_LIFT * normalize(LIFT_START - v, 0, 0.4) : MAX_SINK * normalize(v - 0.7, 0, 0.25);
+    v < LIFT_START ? -MAX_LIFT * normalize(LIFT_START - v, 0, 0.38) : MAX_SINK * normalize(v - 0.72, 0, 0.22);
 
   const forwardTilt = f * features.tilt;
-  const lean = clamp(forwardTilt * 0.35, -11, 11);
+  const lean = clamp(forwardTilt * 0.55, -16, 16);
   const ext = features.indexExtension;
   const open = features.openness;
-  const pointing = clamp((ext - open) * 1.6, 0, 1);
+  const pointing = clamp((ext - open) * 1.8, 0, 1);
 
   const shoulder =
-    lerp(10, 58, ext) +
-    30 * pointing +
-    clamp(forwardTilt * 0.45, -18, 30) +
-    clamp(f * features.indexDeflection * 0.5, -18, 26);
+    lerp(4, 74, ext) +
+    38 * pointing +
+    clamp(forwardTilt * 0.6, -22, 36) +
+    clamp(f * features.indexDeflection * 0.6, -22, 30);
 
-  const depth = normalize(features.size, 0.1, 0.3);
+  const depth = normalize(features.size, 0.1, 0.28);
 
   return {
     x: clamp(lerp(70, 930, u) - f * OUTWARD_BIAS, minX, maxX),
     y: HELD_Y + lift,
-    scale: PUPPET.scale * (1 + lerp(-0.03, 0.06, depth)),
+    scale: PUPPET.scale * (1 + lerp(-0.04, 0.08, depth)),
     bodyRotation: lean,
-    headRotation: clamp(-lean * 0.3 + lerp(7, -3, features.pinch), -9, 9),
-    shoulderAngle: clamp(shoulder, -25, 150),
-    elbowAngle: clamp(lerp(50, 6, ext), -10, 90),
-    wristAngle: clamp(lerp(-10, 16, features.thumbSpread), -25, 30),
-    backShoulderAngle: clamp(lerp(-8, 46, open) - clamp(forwardTilt * 0.2, -10, 10), -30, 110),
-    backElbowAngle: clamp(lerp(44, 8, open), 0, 90),
+    headRotation: clamp(-lean * 0.35 + lerp(10, -5, features.pinch), -13, 13),
+    shoulderAngle: clamp(shoulder, -30, 160),
+    elbowAngle: clamp(lerp(64, 2, ext), -12, 100),
+    wristAngle: clamp(lerp(-16, 24, features.thumbSpread), -30, 36),
+    backShoulderAngle: clamp(lerp(-12, 64, open) - clamp(forwardTilt * 0.25, -12, 12), -35, 120),
+    backElbowAngle: clamp(lerp(52, 4, open), 0, 100),
     depth,
   };
 }
@@ -146,9 +149,14 @@ export function keepApart(left: PuppetRig, right: PuppetRig) {
   const gripGap = right.x - left.x;
   const headGap = right.x - headReach(right) - (left.x + headReach(left));
   const overlap = Math.max(MIN_GRIP_GAP - gripGap, MIN_HEAD_GAP - headGap);
-  if (overlap <= 0) return;
-  left.x -= overlap / 2;
-  right.x += overlap / 2;
+  if (overlap > 0) {
+    left.x -= overlap / 2;
+    right.x += overlap / 2;
+  }
+  // Being pushed apart must never shove a puppet out of the frame: slide the pair back in.
+  const shift = Math.max(0, STAGE_BOUNDS.min - left.x) - Math.max(0, right.x - STAGE_BOUNDS.max);
+  left.x = Math.max(STAGE_BOUNDS.min, left.x + shift);
+  right.x = Math.min(STAGE_BOUNDS.max, right.x + shift);
 }
 
 export function blendRig(from: PuppetRig, to: PuppetRig, t: number, out: PuppetRig): PuppetRig {

@@ -1,13 +1,14 @@
 import type { Settings } from '../types';
 
-const STORAGE_KEY = 'dalang.preferences.v1';
+/** Bumped when the defaults change meaningfully, so old saved values don't mask them. */
+const STORAGE_KEY = 'dalang.preferences.v2';
 
 export const DEFAULT_SETTINGS: Settings = {
   cameraEnabled: true,
   showLandmarks: true,
   mirror: true,
-  sensitivity: 0.5,
-  smoothing: 0.65,
+  sensitivity: 0.65,
+  smoothing: 0.35,
 };
 
 const isUnit = (value: unknown): value is number => typeof value === 'number' && value >= 0 && value <= 1;

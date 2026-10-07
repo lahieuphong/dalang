@@ -1,11 +1,12 @@
 import { useImperativeHandle, useRef, type Ref } from 'react';
-import { STAGE } from '../lib/puppetGeometry';
+import { facing, STAGE } from '../lib/puppetGeometry';
 import { RIG_KEYS } from '../lib/puppetMapping';
 import type { PuppetRig, Side } from '../types';
 import { Puppet, type PuppetHandle } from './Puppet';
 
 export interface StageSceneHandle {
-  applyRig(side: Side, rig: PuppetRig, flicker: number, dt: number): void;
+  /** `presence` is 0 at rest and 1 while a hand holds the puppet. */
+  applyRig(side: Side, rig: PuppetRig, flicker: number, dt: number, presence: number): void;
 }
 
 const GOLD = '#b4813c';
@@ -18,6 +19,8 @@ const VALANCE_BAND = 40;
 const VALANCE_BOTTOM = 52;
 /** How quickly a shadow catches up with its puppet (1/s); it trails by a few frames. */
 const SHADOW_FOLLOW = 24;
+/** The held puppet's torso, relative to its grip point (puppet units), where the lamp glow centres. */
+const GLOW_OFFSET = { x: 24, y: -320 };
 
 /** Repeating ornaments for the top valance and the foreground rail. */
 function OrnamentDefs() {
@@ -39,6 +42,11 @@ function OrnamentDefs() {
         <stop offset="0" stopColor="#5a3214" stopOpacity="0" />
         <stop offset="1" stopColor="#5a3214" stopOpacity="0.2" />
       </linearGradient>
+      <radialGradient id="held-glow">
+        <stop offset="0" stopColor="#fff8e0" stopOpacity="1" />
+        <stop offset="0.5" stopColor="#ffe8b0" stopOpacity="0.6" />
+        <stop offset="1" stopColor="#ffd98a" stopOpacity="0" />
+      </radialGradient>
       <linearGradient id="orn-tassel" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0" stopColor="#0f0603" />
         <stop offset="0.45" stopColor="#2c170d" />
@@ -152,12 +160,28 @@ export function StageScene({ ref }: { ref?: Ref<StageSceneHandle> }) {
   const blurs = useRef<Partial<Record<Side, SVGFEGaussianBlurElement | null>>>({});
   const lastBlur = useRef<Record<Side, number>>({ left: 0, right: 0 });
   const trailing = useRef<Partial<Record<Side, PuppetRig>>>({});
+  const glows = useRef<Partial<Record<Side, SVGEllipseElement | null>>>({});
+  const lastGlow = useRef<Record<Side, number>>({ left: -1, right: -1 });
 
   useImperativeHandle(
     ref,
     () => ({
-      applyRig(side, rig, flicker, dt) {
+      applyRig(side, rig, flicker, dt, presence) {
         figures.current[side]?.apply(rig);
+
+        // A warm pool of lamplight follows the puppet while a hand holds it.
+        const glow = glows.current[side];
+        const glowOpacity = Math.round(presence * 95) / 100;
+        if (glow) {
+          if (glowOpacity !== lastGlow.current[side]) {
+            lastGlow.current[side] = glowOpacity;
+            glow.setAttribute('opacity', String(glowOpacity));
+          }
+          if (glowOpacity > 0) {
+            glow.setAttribute('cx', (rig.x + facing(side) * GLOW_OFFSET.x * rig.scale).toFixed(1));
+            glow.setAttribute('cy', (rig.y + GLOW_OFFSET.y * rig.scale).toFixed(1));
+          }
+        }
 
         // The shadow follows its puppet with a few frames of lag, which reads as depth.
         let shadow = trailing.current[side];
@@ -179,7 +203,9 @@ export function StageScene({ ref }: { ref?: Ref<StageSceneHandle> }) {
           group.setAttribute('transform', `translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${grow.toFixed(4)})`);
           group.setAttribute('opacity', (0.4 - shadow.depth * 0.1).toFixed(3));
         }
-        const blur = Math.round((6 + shadow.depth * 6) * 2) / 2;
+        // Fast moves leave the shadow further behind; it softens with the lag.
+        const lag = Math.hypot(rig.x - shadow.x, rig.y - shadow.y);
+        const blur = Math.round((6 + shadow.depth * 6 + Math.min(6, lag * 0.25)) * 2) / 2;
         if (blur !== lastBlur.current[side]) {
           lastBlur.current[side] = blur;
           blurs.current[side]?.setAttribute('stdDeviation', String(blur));
@@ -200,6 +226,17 @@ export function StageScene({ ref }: { ref?: Ref<StageSceneHandle> }) {
           </filter>
         ))}
       </defs>
+
+      {sides.map((side) => (
+        <ellipse
+          key={side}
+          ref={(el) => void (glows.current[side] = el)}
+          rx="230"
+          ry="300"
+          fill="url(#held-glow)"
+          opacity="0"
+        />
+      ))}
 
       <g fill="#2b1309">
         {sides.map((side) => (

@@ -57,9 +57,9 @@ export class HandTracker {
 function toFrame(result: HandLandmarkerResult, aspect: number, mirror: boolean, time: number): HandFrame {
   const hands: HandDetection[] = result.landmarks.map((landmarks, i) => {
     const category = result.handedness[i]?.[0];
-    // MediaPipe labels handedness as if the image were already mirrored (selfie view).
-    // We feed it the raw camera frame, so its "Left" is the user's right hand.
-    const handedness: Side | null = category ? (category.categoryName === 'Left' ? 'right' : 'left') : null;
+    // On the raw (unmirrored) camera frame, the Tasks API labels the user's
+    // physical hand directly; verified with a real webcam.
+    const handedness: Side | null = category ? (category.categoryName === 'Right' ? 'right' : 'left') : null;
     // With a mirrored preview your left hand appears on the left, next to the left puppet.
     const naturalSide: Side | null = handedness && (mirror ? handedness : handedness === 'left' ? 'right' : 'left');
     const world = result.worldLandmarks[i];

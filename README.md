@@ -76,16 +76,15 @@ webcam ──► MediaPipe HandLandmarker (≈28 Hz, GPU with CPU fallback)
   second. It never processes the same video frame twice and only runs once the
   video has data. Between detections, the springs keep animating at display
   rate.
-- **Stable assignment.** Handedness is noisy, so `HandAssigner` scores each
-  possible pairing. The score combines distance from each puppet's last palm
-  position, MediaPipe handedness and a weak left/right screen prior. While a
-  hand is tracked, continuity wins: crossing hands or a mislabelled frame
-  never swaps puppets. Handedness re-routes a hand only after it disagrees
-  consistently for about a third of a second.
-- **Mirroring.** MediaPipe labels handedness as if the image were a selfie.
-  We feed it the raw frame, so the labels are swapped back in
-  `lib/handTracker.ts`. Landmarks are then mirrored into view space, so the
-  overlay canvas is never flipped.
+- **Stable assignment.** `HandAssigner` works like a mirror: a newly raised
+  hand takes the puppet on its side of the preview, so your right hand moves
+  the puppet on the right of the screen. MediaPipe handedness only breaks ties
+  for hands right in the middle. While a hand is tracked, continuity (distance
+  from that puppet's last palm position) wins, so crossing hands or a
+  mislabelled frame never swaps puppets.
+- **Mirroring.** Landmarks are mirrored into view space when the preview is,
+  so the overlay canvas is never flipped. On the raw camera frame, MediaPipe's
+  handedness label is the user's physical hand.
 - **Transitions.** Without a hand, a puppet rests low with its lower legs
   hidden behind the rail. When a hand appears, the puppet is lifted into the
   scene over about 400 ms. When a hand is lost, its pose is held for 380 ms,
@@ -123,7 +122,7 @@ src/
 ## Developer flags
 
 - `?debug=1` shows inference FPS, handedness, the hand-to-puppet assignment,
-  the slots' handedness disagreement and the live features.
+  each puppet's last palm position and the live features.
 - `?simulate=1` drives the puppets with synthetic, scripted hands, so you can
   work without a camera. Combine both flags as `?simulate=1&debug=1`.
 

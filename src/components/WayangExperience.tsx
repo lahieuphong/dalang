@@ -162,7 +162,8 @@ export function WayangExperience() {
     const { left, right } = engine.puppets;
     keepApart(left.prepareTarget(now, dt, amplitude), right.prepareTarget(now, dt, amplitude));
     for (const side of SIDES) {
-      sceneRef.current?.applyRig(side, engine.puppets[side].integrate(dt, settings), flicker, dt);
+      const puppet = engine.puppets[side];
+      sceneRef.current?.applyRig(side, puppet.integrate(dt, settings), flicker, dt, puppet.presence);
     }
 
     // Tell React which puppets are held only once that settles.
@@ -242,7 +243,7 @@ function describeDebug(engine: Engine, now: number, source: string): string {
     const f = puppet.features;
     const s = slots[side];
     lines.push(
-      `${side.padEnd(5)}  ${puppet.isTracking(now) ? 'held ' : 'rest '} age ${s.ageMs === Infinity ? '∞' : Math.round(s.ageMs)}ms  disagree ${fixed(s.disagreement)}`,
+      `${side.padEnd(5)}  ${puppet.isTracking(now) ? 'held ' : 'rest '} age ${s.ageMs === Infinity ? '∞' : Math.round(s.ageMs)}ms  palm ${fixed(s.palm?.x)},${fixed(s.palm?.y)}`,
     );
     if (f) {
       lines.push(

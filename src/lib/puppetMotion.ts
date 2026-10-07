@@ -7,43 +7,45 @@ import { OneEuroFilter, stepSpring, type SpringParams } from './smoothing';
 /** Keep the last tracked pose this long after a hand drops out, so brief misses never flicker. */
 export const GRACE_MS = 380;
 /** Engagement (0 = idle pose, 1 = hand pose) change per second. */
-const PICKUP_RATE = 2.6;
+const PICKUP_RATE = 3.4;
 const RELEASE_RATE = 1.5;
+/** The little hop-and-wave when a hand first picks a puppet up lasts about half a second. */
+const FLOURISH_RATE = 2.2;
 
 type RigKey = (typeof RIG_KEYS)[number];
 type FeatureKey = keyof HandFeatures;
 
 /** One Euro [minCutoff Hz, beta] per feature, tuned to each feature's units. */
 const FEATURE_FILTERS: Record<FeatureKey, readonly [number, number]> = {
-  palmX: [1.1, 6],
-  palmY: [1.1, 6],
-  tilt: [0.9, 0.03],
-  indexDeflection: [0.9, 0.03],
-  indexExtension: [1.4, 1.2],
-  openness: [1.4, 1.2],
-  thumbSpread: [1.2, 1],
-  pinch: [1.4, 1.2],
-  size: [0.6, 1.5],
+  palmX: [1.2, 10],
+  palmY: [1.2, 10],
+  tilt: [1, 0.05],
+  indexDeflection: [1, 0.05],
+  indexExtension: [1.6, 2],
+  openness: [1.6, 2],
+  thumbSpread: [1.4, 1.6],
+  pinch: [1.6, 2],
+  size: [0.8, 2],
 };
 const FEATURE_KEYS = Object.keys(FEATURE_FILTERS) as FeatureKey[];
 
 function springParams(smoothing: number): Record<RigKey, SpringParams> {
-  const position = { frequency: lerp(15, 6.5, smoothing), damping: 0.86 };
-  const soft = { frequency: lerp(10, 5, smoothing), damping: 1 };
-  // Under-damped arms swing a little past their target, like loose leather on a pin.
-  const arm = { frequency: lerp(13, 6.5, smoothing), damping: 0.62 };
+  const position = { frequency: lerp(18, 7, smoothing), damping: 0.84 };
+  const soft = { frequency: lerp(12, 5.5, smoothing), damping: 1 };
+  // Under-damped arms swing past their target, like loose leather on a pin.
+  const arm = { frequency: lerp(15, 7, smoothing), damping: 0.5 };
   return {
     x: position,
     y: position,
     scale: soft,
     depth: soft,
-    bodyRotation: { frequency: lerp(14, 6.5, smoothing), damping: 0.8 },
-    headRotation: { frequency: lerp(12, 5.5, smoothing), damping: 0.7 },
+    bodyRotation: { frequency: lerp(16, 7, smoothing), damping: 0.78 },
+    headRotation: { frequency: lerp(13, 6, smoothing), damping: 0.62 },
     shoulderAngle: arm,
     elbowAngle: arm,
     backShoulderAngle: arm,
     backElbowAngle: arm,
-    wristAngle: { frequency: lerp(15, 7, smoothing), damping: 0.6 },
+    wristAngle: { frequency: lerp(17, 8, smoothing), damping: 0.5 },
   };
 }
 
@@ -65,6 +67,8 @@ export class PuppetController {
   private lastSeen = -Infinity;
   private engagement = 0;
   private holding = false;
+  /** 1 right after a pickup, decaying to 0: drives the hop-and-wave. */
+  private flourish = 0;
   private springSmoothing = -1;
   private springs: Record<RigKey, SpringParams> = springParams(0.5);
 
@@ -80,6 +84,11 @@ export class PuppetController {
 
   isTracking(now: number) {
     return this.tracked !== null && now - this.lastSeen < GRACE_MS;
+  }
+
+  /** 0 at rest, 1 when fully held: how strongly to light the puppet up. */
+  get presence() {
+    return smoothstep(this.engagement);
   }
 
   /** Feeds a newly assigned hand. Returns true when this picks the puppet up from rest. */
@@ -104,6 +113,7 @@ export class PuppetController {
 
     const pickedUp = !this.holding;
     this.holding = true;
+    if (pickedUp) this.flourish = 1;
     return pickedUp;
   }
 
@@ -125,15 +135,28 @@ export class PuppetController {
         ? blendRig(idle, this.tracked, smoothstep(this.engagement), this.target)
         : Object.assign(this.target, idle);
 
-    // Secondary motion: the body leans into travel, loose arms trail behind it,
-    // and hanging arms partly resist the lean as gravity would.
+    // Secondary motion: the body leans into travel, loose arms trail behind it
+    // sideways and fling when the puppet is raised or dropped quickly, the head
+    // tips with vertical moves, and hanging arms partly resist the lean.
     const forwardSpeed = facing(this.side) * this.velocity.x;
-    const trail = clamp(-forwardSpeed * 0.04, -24, 24);
-    target.bodyRotation += clamp(forwardSpeed * 0.008, -4, 4);
-    target.shoulderAngle += trail * 0.8 + target.bodyRotation * 0.4;
-    target.backShoulderAngle += trail + target.bodyRotation * 0.4;
-    target.elbowAngle += trail * 0.4;
-    target.backElbowAngle += trail * 0.4;
+    const trail = clamp(-forwardSpeed * 0.06, -32, 32);
+    const fling = clamp(this.velocity.y * 0.045, -24, 24);
+    target.bodyRotation += clamp(forwardSpeed * 0.012, -7, 7);
+    target.headRotation += clamp(this.velocity.y * 0.02, -8, 8);
+    target.shoulderAngle += trail * 0.8 + fling + target.bodyRotation * 0.4;
+    target.backShoulderAngle += trail + fling * 0.8 + target.bodyRotation * 0.4;
+    target.elbowAngle += trail * 0.4 + fling * 0.5;
+    target.backElbowAngle += trail * 0.4 + fling * 0.5;
+
+    // Pickup flourish: a small hop with a raised-arm greeting, then settle.
+    if (this.flourish > 0) {
+      this.flourish = Math.max(0, this.flourish - FLOURISH_RATE * dt);
+      const bump = Math.sin(Math.PI * (1 - this.flourish));
+      target.y -= 26 * bump;
+      target.shoulderAngle += 30 * bump;
+      target.backShoulderAngle += 18 * bump;
+      target.headRotation -= 5 * bump;
+    }
     return target;
   }
 
