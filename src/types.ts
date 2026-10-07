@@ -57,6 +57,8 @@ export interface HandFrame {
   aspect: number;
   /** When the camera captured this frame (performance.now() timeline). */
   time: number;
+  /** When the tracking result reached the render thread (same timeline). */
+  received: number;
 }
 
 export type FingerName = 'thumb' | 'index' | 'middle' | 'ring' | 'pinky';
@@ -64,9 +66,9 @@ export type FingerName = 'thumb' | 'index' | 'middle' | 'ring' | 'pinky';
 export const FINGER_NAMES: readonly FingerName[] = ['thumb', 'index', 'middle', 'ring', 'pinky'];
 
 export interface FingerFeatures {
-  /** 0 = folded into the palm, 1 = fully straight (counts knuckle flexion too). */
+  /** 0 = folded into the palm, 1 = fully straight; always 1 - curl. */
   extension: number;
-  /** 0 = straight, 1 = fully flexed, from the joint angles. */
+  /** 0 = straight, 1 = fully flexed; linear in the three joint angles. */
   curl: number;
   /** Pointing direction relative to the hand axis, degrees, positive toward +x in view. */
   direction: number;
@@ -94,7 +96,7 @@ export interface HandFeatures {
   thumbSpread: number;
   /** Thumb tip ↔ index tip distance divided by the hand scale. */
   pinchDistance: number;
-  /** 0 = wide apart … 1 = touching; continuous. */
+  /** 0 = wide apart … 1 = touching; linear over the whole approach. */
   pinchStrength: number;
   /** Thumb ↔ middle fingertip closeness, 0..1. */
   middlePinch: number;

@@ -11,8 +11,9 @@ yarn install
 yarn build
 ```
 
-Kết quả nằm trong thư mục `dist/`, khoảng 31 MB, phần lớn là model và runtime
-nhận diện tay:
+Kết quả nằm trong thư mục `dist/`, khoảng 43 MB, phần lớn là model và runtime
+nhận diện tay. Người xem không tải hết chừng đó: trình duyệt chỉ lấy một bản
+runtime phù hợp (khoảng 12 MB) cộng với model (khoảng 8 MB).
 
 ```
 dist/
@@ -21,7 +22,7 @@ dist/
 ├── .htaccess              ← cấu hình cho Apache/LiteSpeed (IIS bỏ qua file này)
 ├── favicon.svg, apple-touch-icon.png, og-image.jpg
 ├── assets/                ← JS/CSS có hash trong tên file
-├── mediapipe/wasm/        ← runtime nhận diện tay
+├── mediapipe/wasm/        ← runtime nhận diện tay (6 file, phải upload đủ)
 └── models/hand_landmarker.task
 ```
 
@@ -48,6 +49,8 @@ dist/
 - [ ] Giơ hai tay lên: hai con rối được nâng lên và cử động.
 - [ ] `https://dalang.hongvan.net/models/hand_landmarker.task` tải về được (không báo 404).
 - [ ] DevTools → Network: `vision_wasm_internal.wasm` có `Content-Type: application/wasm`.
+- [ ] `https://dalang.hongvan.net/mediapipe/wasm/vision_wasm_module_internal.js` mở được (không báo 404). Bản này dùng khi máy người xem yếu và việc nhận diện tay được chuyển sang Web Worker.
+- [ ] Mở `https://dalang.hongvan.net/?debug=1`: bảng số liệu hiện `cameraFPS`, `inferenceMs`, `inputAgeMs`, `renderFPS`.
 - [ ] DevTools → Console: không có lỗi đỏ.
 
 Nếu trang chủ báo **500 Internal Server Error** ngay sau khi upload, hosting

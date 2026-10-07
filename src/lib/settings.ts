@@ -1,14 +1,15 @@
 import type { Settings } from '../types';
 
 /** Bumped when the defaults change meaningfully, so old saved values don't mask them. */
-const STORAGE_KEY = 'dalang.preferences.v2';
+const STORAGE_KEY = 'dalang.preferences.v3';
 
 export const DEFAULT_SETTINGS: Settings = {
   cameraEnabled: true,
   showLandmarks: true,
   mirror: true,
-  sensitivity: 0.65,
-  smoothing: 0.35,
+  // Tuned so the defaults are already fast and lively; neither slider is needed to get a responsive puppet.
+  sensitivity: 0.5,
+  smoothing: 0.3,
 };
 
 const isUnit = (value: unknown): value is number => typeof value === 'number' && value >= 0 && value <= 1;
@@ -44,10 +45,24 @@ export interface DebugFlags {
   debug: boolean;
   /** `?simulate=1`: drive the puppets with synthetic hands instead of the camera. */
   simulate: boolean;
+  /**
+   * `?tracker=main` / `?tracker=worker`: pin where the hand model runs instead
+   * of letting the app choose, for comparison.
+   */
+  tracker: 'main' | 'worker' | null;
+  /** `?delegate=cpu` / `?delegate=gpu`: force the model onto one delegate, for comparison. */
+  delegate: 'cpu' | 'gpu' | null;
 }
 
 export function readDebugFlags(): DebugFlags {
   const params = new URLSearchParams(window.location.search);
   const on = (key: string) => params.has(key) && params.get(key) !== '0';
-  return { debug: on('debug'), simulate: on('simulate') };
+  const delegate = params.get('delegate');
+  const tracker = params.get('tracker');
+  return {
+    debug: on('debug'),
+    simulate: on('simulate'),
+    tracker: tracker === 'main' || tracker === 'worker' ? tracker : null,
+    delegate: delegate === 'cpu' || delegate === 'gpu' ? delegate : null,
+  };
 }

@@ -33,7 +33,25 @@ interface Engine {
   frameAt: number;
   /** Which puppets are held, as "lr", "l-", "-r" or "--"; reported to React once it settles. */
   held: { reported: string; pending: string; since: number };
+  metrics: Metrics;
 }
+
+/** Pipeline timing for `?debug=1`, all in ms and lightly averaged. */
+interface Metrics {
+  /** Render frame time, and the longest frame of the last second. */
+  frameMs: number;
+  worstFrameMs: number;
+  worstPending: number;
+  worstSince: number;
+  /** Camera capture → that frame's result driving the pose. */
+  inputAgeMs: number;
+  /** Result back on this thread → driving the pose (the wait for the next render frame). */
+  resultToTargetMs: number;
+  /** How old the result on screen is, averaged over render frames. */
+  resultAgeMs: number;
+}
+
+const average = (current: number, value: number) => (current ? current + (value - current) * 0.1 : value);
 
 function createEngine(simulate: boolean): Engine {
   return {
@@ -44,6 +62,7 @@ function createEngine(simulate: boolean): Engine {
     frame: null,
     frameAt: -Infinity,
     held: { reported: '--', pending: '--', since: 0 },
+    metrics: { frameMs: 0, worstFrameMs: 0, worstPending: 0, worstSince: 0, inputAgeMs: 0, resultToTargetMs: 0, resultAgeMs: 0 },
   };
 }
 
@@ -59,7 +78,7 @@ export function WayangExperience() {
   const camera = useCamera();
   const reducedMotion = useReducedMotion();
   const cameraLive = camera.status === 'requesting' || camera.status === 'active';
-  const tracking = useHandTracking(!flags.simulate && cameraLive);
+  const tracking = useHandTracking(!flags.simulate && cameraLive, flags);
   const [held, setHeld] = useState<Record<Side, boolean>>({ left: false, right: false });
   const [soundOn, setSoundOn] = useState(false);
 
@@ -155,6 +174,13 @@ export function WayangExperience() {
     if (frame) {
       engine.frame = frame;
       engine.frameAt = now;
+      if (flags.debug) {
+        // Wall-clock here, not the frame timestamp: the result may be newer than the frame's start.
+        const clock = performance.now();
+        const metrics = engine.metrics;
+        metrics.inputAgeMs = average(metrics.inputAgeMs, Math.max(0, clock - frame.time));
+        metrics.resultToTargetMs = average(metrics.resultToTargetMs, Math.max(0, clock - frame.received));
+      }
       engine.assigned = engine.assigner.assign(frame.hands, now);
       for (const side of SIDES) {
         const pickedUp = engine.puppets[side].observe(engine.assigned[side], frame.aspect, now, settings, frame.time);
@@ -185,6 +211,18 @@ export function WayangExperience() {
     }
 
     if (flags.debug) {
+      const metrics = engine.metrics;
+      const frameMs = dt * 1000;
+      if (frameMs > 0) metrics.frameMs = average(metrics.frameMs, frameMs);
+      metrics.worstPending = Math.max(metrics.worstPending, frameMs);
+      if (now - metrics.worstSince > 1000) {
+        metrics.worstFrameMs = metrics.worstPending;
+        metrics.worstPending = 0;
+        metrics.worstSince = now;
+      }
+      if (engine.frame && now - engine.frameAt < OVERLAY_STALE_MS) {
+        metrics.resultAgeMs = average(metrics.resultAgeMs, Math.max(0, performance.now() - engine.frame.received));
+      }
       debugRef.current?.update(now, () =>
         describeDebug(engine, now, engine.simulator ? null : tracker, video, camera.trackSettingsRef.current),
       );
@@ -240,7 +278,10 @@ const bar = (value: number) => {
   return '█'.repeat(filled) + '░'.repeat(BAR_WIDTH - filled);
 };
 
-/** Engineering readout for `?debug=1`: pipeline timing, assignment and every finger channel as a bar. */
+/**
+ * Engineering readout for `?debug=1`: where the time goes between the
+ * camera and the screen, then the assignment and every finger channel.
+ */
 function describeDebug(
   engine: Engine,
   now: number,
@@ -249,17 +290,22 @@ function describeDebug(
   track: MediaTrackSettings | null,
 ): string {
   const fixed = (n: number | undefined, digits = 2) => (n === undefined || !Number.isFinite(n) ? '–' : n.toFixed(digits));
+  const { metrics } = engine;
   const lines: string[] = [];
   if (tracker) {
-    const { cameraFps, inferenceFps, inferenceMs } = tracker.stats;
-    const age = engine.frame ? now - engine.frame.time : NaN;
+    const { cameraFps, inferenceFps, inferenceMs, turnaroundMs, captureDelayMs } = tracker.stats;
     lines.push(
-      `camera   ${video?.videoWidth ?? '–'}×${video?.videoHeight ?? '–'}  ${fixed(cameraFps, 1)} fps (track ${fixed(track?.frameRate, 0)})`,
-      `infer    ${fixed(inferenceFps, 1)} fps  ${fixed(inferenceMs, 1)} ms  input age ${fixed(age, 0)} ms`,
+      `cameraFPS    ${fixed(cameraFps, 1)}  (${video?.videoWidth ?? '–'}×${video?.videoHeight ?? '–'}, track ${fixed(track?.frameRate, 0)} fps)  capture→page ${captureDelayMs ? fixed(captureDelayMs, 0) : '–'} ms`,
+      `inferenceFPS ${fixed(inferenceFps, 1)}  inferenceMs ${fixed(inferenceMs, 1)}  round trip ${fixed(turnaroundMs, 1)} ms  [${tracker.mode} · ${tracker.delegate}]`,
+      `inputAgeMs   ${fixed(metrics.inputAgeMs, 0)} (capture→target)  result→target ${fixed(metrics.resultToTargetMs, 1)} ms  trackingResultAgeMs ${fixed(metrics.resultAgeMs, 0)}`,
     );
   } else {
-    lines.push('source   simulated hands');
+    lines.push('source       simulated hands');
   }
+  const { left, right } = engine.puppets;
+  lines.push(
+    `renderFPS    ${fixed(metrics.frameMs ? 1000 / metrics.frameMs : NaN, 1)}  worst frame ${fixed(metrics.worstFrameMs, 0)} ms  target→render L ${fixed(left.follow.lagMs, 0)} ms (${fixed(left.follow.distance, 0)} px)  R ${fixed(right.follow.lagMs, 0)} ms (${fixed(right.follow.distance, 0)} px)`,
+  );
   engine.frame?.hands.forEach((hand, i) => {
     const slot = hand === engine.assigned.left ? 'L' : hand === engine.assigned.right ? 'R' : '·';
     const palm = palmCenter(hand.landmarks);
@@ -271,8 +317,8 @@ function describeDebug(
     lines.push('', `${side.toUpperCase()} puppet  ${puppet.isTracking(now) ? 'held' : 'rest'}`);
     if (!f || !puppet.isTracking(now)) continue;
     for (const finger of FINGER_NAMES) {
-      const { extension, curl } = f[finger];
-      lines.push(`  ${finger.padEnd(6)} ${bar(extension)} ${fixed(extension)}  curl ${fixed(curl)}`);
+      const { curl } = f[finger];
+      lines.push(`  ${finger.padEnd(6)} ${bar(curl)} curl ${fixed(curl)}`);
     }
     lines.push(
       `  pinch  ${bar(f.pinchStrength)} ${fixed(f.pinchStrength)}  ${puppet.pinched ? 'PINCHED' : ''}`,

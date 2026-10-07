@@ -130,6 +130,6 @@ export class HandSimulator {
     const t = now / 1000;
     const hands = [synthesizeHand(scriptedPose('left', t), 'left')];
     if (t % 11 < 8.8) hands.push(synthesizeHand(scriptedPose('right', t), 'right'));
-    return { hands, aspect: ASPECT, time: now };
+    return { hands, aspect: ASPECT, time: now, received: now };
   }
 }

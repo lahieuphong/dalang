@@ -2,7 +2,7 @@
 // from our own origin, and makes sure the hand landmarker model is present.
 // Runs automatically before `dev` and `build`.
 
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,12 +20,9 @@ function copyWasm() {
   }
   mkdirSync(wasmTarget, { recursive: true });
   let copied = 0;
+  // All three builds are needed: the tracking worker is an ES module and loads
+  // the module build; the main-thread fallback loads the classic one (SIMD or not).
   for (const file of readdirSync(wasmSource)) {
-    // The app loads the classic (non-ES-module) runtime, SIMD or not; skip the module build.
-    if (file.startsWith('vision_wasm_module_internal')) {
-      rmSync(join(wasmTarget, file), { force: true });
-      continue;
-    }
     const from = join(wasmSource, file);
     const to = join(wasmTarget, file);
     if (existsSync(to) && statSync(to).size === statSync(from).size) continue;

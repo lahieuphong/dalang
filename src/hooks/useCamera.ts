@@ -2,14 +2,15 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { CameraStatus } from '../types';
 
 /**
- * Fresh frames matter more than resolution for hand control: ask for a modest
- * 960×540 at up to 60 fps first, then plain 720p30, then anything at all.
- * `ideal` values never reject a camera; the fallbacks cover devices that fail
- * to open in the requested mode.
+ * Fresh frames matter more than resolution for hand control, and the model
+ * only looks at a small crop anyway. So: first insist on a 50+ fps mode at
+ * whatever modest resolution the camera offers one (many only do 60 fps at
+ * 640×480), then settle for a modest 30 fps mode, then anything at all.
+ * What was actually granted is read back from the track, never assumed.
  */
 const ATTEMPTS: readonly MediaStreamConstraints[] = [
-  { video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 540 }, frameRate: { ideal: 60 } }, audio: false },
-  { video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }, audio: false },
+  { video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 540 }, frameRate: { min: 50, ideal: 60 } }, audio: false },
+  { video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 540 }, frameRate: { ideal: 30 } }, audio: false },
   { video: { facingMode: 'user' }, audio: false },
 ];
 const RETRYABLE = new Set(['OverconstrainedError', 'NotReadableError', 'AbortError']);

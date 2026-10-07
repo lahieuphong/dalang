@@ -1,5 +1,5 @@
-import type { HandFeatures, PuppetRig, Side } from '../types';
-import { clamp, lerp, normalize } from './handMath';
+import type { FingerName, HandFeatures, PuppetRig, Side } from '../types';
+import { boost, clamp, lerp, normalize, respond, softClamp } from './handMath';
 import { facing, PUPPET, STAGE } from './puppetGeometry';
 
 /** Feet sit exactly on the rail top at this grip height. */
@@ -20,10 +20,24 @@ const X_RANGE: Record<Side, readonly [number, number]> = { left: [150, 470], rig
 const STAGE_BOUNDS = { min: 140, max: 860 } as const;
 
 /**
- * Hands naturally drift toward the middle of the camera frame, so each puppet
- * is nudged this far toward its own side of the stage.
+ * Where each hand naturally sits in the mirrored camera view, and where that
+ * puts its puppet. Travel is measured from this home, so turning sensitivity
+ * up makes the puppet move further around it instead of pushing the pair
+ * toward the edges of the stage.
  */
-const OUTWARD_BIAS = 50;
+const HOME_PALM_X: Record<Side, number> = { left: 0.33, right: 0.67 };
+const HOME_X: Record<Side, number> = { left: 300, right: 700 };
+const HOME_PALM_Y = 0.6;
+/**
+ * Stage units travelled per frame-width / frame-height of palm travel at
+ * gain 1. At the default gain a hand covers its puppet's whole range within
+ * roughly the middle two thirds of the camera view.
+ */
+const TRAVEL_X = 1120;
+const TRAVEL_Y = 480;
+/** The last stretch before a limit is eased, so a puppet never hits a wall. */
+const X_KNEE = 40;
+const Y_KNEE = 24;
 
 /**
  * Preferred closest approach, measured at the grip and at the head (which
@@ -37,13 +51,24 @@ const SOFTNESS = 22;
 /** Distance from the lean pivot (knees) up to the face, in puppet units. */
 const HEAD_LEVER = PUPPET.leanY + 370;
 
-/**
- * Raising the hand above LIFT_START (normalized, after sensitivity) lifts the
- * held puppet further; dropping it low lets the puppet sink toward the rail.
- */
+/** A held puppet can be lifted this far above the rail, or let sink this far behind it. */
 const MAX_LIFT = 150;
 const MAX_SINK = 50;
-const LIFT_START = 0.58;
+
+/**
+ * Overall control gain from the sensitivity setting: 0.75 (calm), 1.25 at
+ * the default, 1.75 (lively). It scales how far the puppet moves for a given
+ * hand movement and has nothing to do with smoothing.
+ */
+export const controlGain = (sensitivity: number) => lerp(0.75, 1.75, clamp(sensitivity, 0, 1));
+
+/** The ring and little fingers move less on their own, so they are given more gain. */
+const FINGER_GAIN: Record<FingerName, number> = { thumb: 1.1, index: 1, middle: 1, ring: 1.15, pinky: 1.25 };
+
+/** Upright hands lean in by a few degrees; that much roll is treated as standing straight. */
+const NEUTRAL_ROLL = 4;
+const LEAN_GAIN = 0.75;
+const MAX_LEAN = 20;
 
 export const RIG_KEYS = [
   'x',
@@ -125,70 +150,79 @@ export function idleRig(side: Side, time: number, amplitude: number, out: Puppet
 
 /**
  * Where a held puppet stands for a given palm position (normalized view
- * coordinates). Kept separate from articulation so the root can be fed a
- * predicted palm position every render frame.
+ * coordinates). Linear around the hand's home with no flat spots, so the
+ * slightest palm movement moves the puppet; only the approach to a limit is
+ * eased. Kept separate from articulation so the root can be fed a predicted
+ * palm position every render frame.
  */
 export function stagePosition(palmX: number, palmY: number, side: Side, sensitivity: number, out: { x: number; y: number }) {
-  const f = facing(side);
-  const gain = lerp(1, 1.9, sensitivity);
-  const u = clamp(0.5 + (palmX - 0.5) * gain, 0, 1);
-  const v = clamp(0.5 + (palmY - 0.5) * gain, 0, 1);
+  const gain = controlGain(sensitivity);
   const [minX, maxX] = X_RANGE[side];
-  const lift = v < LIFT_START ? -MAX_LIFT * normalize(LIFT_START - v, 0, 0.38) : MAX_SINK * normalize(v - 0.72, 0, 0.22);
-  out.x = clamp(lerp(70, 930, u) - f * OUTWARD_BIAS, minX, maxX);
-  out.y = HELD_Y + lift;
+  out.x = softClamp(HOME_X[side] + (palmX - HOME_PALM_X[side]) * TRAVEL_X * gain, minX, maxX, X_KNEE);
+  out.y = HELD_Y + softClamp((palmY - HOME_PALM_Y) * TRAVEL_Y * gain, -MAX_LIFT, MAX_SINK, Y_KNEE);
 }
 
 /**
  * Turns filtered hand features into every joint of the puppet except its root
  * position. It is fully continuous: each human finger drives its own puppet
- * joint, so a single finger moving changes only its part of the pose.
+ * joint, so a single finger moving changes only its part of the pose, and
+ * every finger signal goes through the response curve, so a slight bend
+ * already shows.
  *
  * - hand roll leans the body; palm pitch and the pinch nod the head
- * - INDEX  → front shoulder: extension raises it, direction aims it,
- *            extending it alone (others curled) points
+ * - INDEX  → front shoulder: straight raises the arm, bending lowers it, its
+ *            direction aims it, extending it alone (others curled) points
  * - MIDDLE → front elbow: its curl bends the elbow
  * - THUMB  → front wrist: abduction and curl turn it
- * - PINCH  → a precise grip: wrist turns in, forearm draws in, fingers close
- * - RING   → back shoulder: extension raises it
- * - PINKY  → back elbow: extension straightens it
- * - fist   → compacts both arms; openness and finger spread add a little flourish
+ * - PINCH  → a precise grip over the whole approach of thumb and index:
+ *            wrist turns in, forearm draws in, fingers close
+ * - RING   → back shoulder: straight raises it
+ * - PINKY  → back elbow: its curl bends it
+ * - fist   → compacts both arms; finger spread adds a little flourish
  * - palm size (distance to camera) → depth: scale and shadow
  */
-export function articulateFromHand(hand: HandFeatures, side: Side, out: PuppetRig): PuppetRig {
+export function articulateFromHand(hand: HandFeatures, side: Side, sensitivity: number, out: PuppetRig): PuppetRig {
   const f = facing(side);
-  const { thumb, index, middle, ring, pinky, fistStrength: fist, pinchStrength: pinch } = hand;
-  const forwardRoll = f * hand.roll;
+  const gain = controlGain(sensitivity);
+  const fist = hand.fistStrength;
+  const thumbBend = respond(hand.thumb.curl, FINGER_GAIN.thumb * gain);
+  const indexBend = respond(hand.index.curl, FINGER_GAIN.index * gain);
+  const middleBend = respond(hand.middle.curl, FINGER_GAIN.middle * gain);
+  const ringBend = respond(hand.ring.curl, FINGER_GAIN.ring * gain);
+  const pinkyBend = respond(hand.pinky.curl, FINGER_GAIN.pinky * gain);
+  // The pinch is already linear over the whole approach; sensitivity only leans on it gently.
+  const pinch = boost(hand.pinchStrength, Math.sqrt(gain));
 
-  const lean = clamp(forwardRoll * 0.55, -16, 16);
+  const forwardRoll = f * hand.roll - NEUTRAL_ROLL;
+  const lean = softClamp(forwardRoll * LEAN_GAIN * gain, -MAX_LEAN, MAX_LEAN, 6);
   out.bodyRotation = lean;
-  out.headRotation = clamp(-lean * 0.3 + hand.pitch * 0.15 + pinch * 6, -13, 13);
+  out.headRotation = clamp(-lean * 0.3 + hand.pitch * 0.15 + pinch * 8, -14, 14);
 
-  // A curled finger has no meaningful direction, so its aim is weighted by its extension.
-  const indexAim = clamp(f * index.direction, -40, 40) * index.extension;
-  const othersExtension = (middle.extension + ring.extension + pinky.extension) / 3;
-  const pointing = clamp((index.extension - othersExtension) * 1.8, 0, 1);
+  // A curled finger has no meaningful direction, so its aim is weighted by how straight it is.
+  const indexAim = clamp(f * hand.index.direction, -40, 40) * (1 - indexBend);
+  const pointing = clamp(((middleBend + ringBend + pinkyBend) / 3 - indexBend) * 1.8, 0, 1);
 
   out.shoulderAngle = clamp(
-    lerp(4, 74, index.extension) + 0.6 * indexAim + 30 * pointing + clamp(forwardRoll * 0.5, -20, 30) - 14 * fist + 5 * hand.openness,
+    lerp(78, 6, indexBend) + 0.6 * indexAim + 28 * pointing + clamp(forwardRoll * 0.5, -20, 30) - 12 * fist,
     -30,
     160,
   );
-  out.elbowAngle = clamp(lerp(4, 72, middle.curl) + 14 * pinch + 18 * fist - 10 * pointing, -12, 110);
+  out.elbowAngle = clamp(lerp(4, 76, middleBend) + 24 * pinch + 16 * fist - 10 * pointing, -12, 115);
+  // The thumb turns the wrist on its own; as a pinch closes, the pinch takes the wrist over.
   out.wristAngle = clamp(
-    lerp(-14, 22, hand.thumbSpread) - 18 * thumb.curl - 20 * pinch + 8 * (hand.spreadIndexMiddle - 0.4),
-    -36,
-    36,
+    (1 - pinch) * (lerp(-10, 20, hand.thumbSpread) - 14 * thumbBend) - 34 * pinch + 8 * (hand.spreadIndexMiddle - 0.4),
+    -42,
+    42,
   );
-  out.frontFingerCurl = clamp(Math.max(index.curl, 0.85 * pinch) * 75, 0, 80);
+  out.frontFingerCurl = clamp(Math.max(indexBend, 0.9 * pinch) * 78, 0, 80);
 
   out.backShoulderAngle = clamp(
-    lerp(-12, 62, ring.extension) - 12 * fist + 6 * hand.spreadMiddleRing - clamp(forwardRoll * 0.2, -10, 10),
+    lerp(64, -12, ringBend) - 10 * fist + 6 * hand.spreadMiddleRing - clamp(forwardRoll * 0.2, -10, 10),
     -35,
     120,
   );
-  out.backElbowAngle = clamp(lerp(58, 4, pinky.extension) + 6 * hand.spreadRingPinky, 0, 100);
-  out.backFingerCurl = clamp(((ring.curl + pinky.curl) / 2) * 75, 0, 80);
+  out.backElbowAngle = clamp(lerp(4, 60, pinkyBend) + 6 * hand.spreadRingPinky, 0, 100);
+  out.backFingerCurl = clamp(((ringBend + pinkyBend) / 2) * 78, 0, 80);
 
   const depth = normalize(hand.size, 0.1, 0.28);
   out.depth = depth;
