@@ -4,10 +4,10 @@ import type { Point, PuppetRig, Side } from '../types';
 export const STAGE = {
   width: 1000,
   height: 860,
-  /** Top edge of the foreground rail the puppets stand on. */
-  railTop: 780,
+  /** Top edge of the foreground rail (about 7% of the screen height). */
+  railTop: 798,
   /** Where the blencong lamp sits; shadows are cast away from it. */
-  lamp: { x: 500, y: 70 },
+  lamp: { x: 500, y: 60 },
 } as const;
 
 export interface ArmGeometry {

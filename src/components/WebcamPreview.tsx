@@ -14,10 +14,10 @@ interface WebcamPreviewProps {
   simulated: boolean;
 }
 
-function Placeholder({ status, cameraEnabled, onEnable }: Pick<WebcamPreviewProps, 'status' | 'cameraEnabled' | 'onEnable'>) {
+function CameraPrompt({ status, cameraEnabled, onEnable }: Pick<WebcamPreviewProps, 'status' | 'cameraEnabled' | 'onEnable'>) {
   if (status === 'requesting') {
     return (
-      <div className="webcam__placeholder">
+      <div className="webcam__prompt">
         <span className="webcam__spinner" aria-hidden="true" />
         <p className="webcam__note">Waiting for camera…</p>
       </div>
@@ -25,7 +25,7 @@ function Placeholder({ status, cameraEnabled, onEnable }: Pick<WebcamPreviewProp
   }
   if (status === 'unsupported') {
     return (
-      <div className="webcam__placeholder">
+      <div className="webcam__prompt">
         <p className="webcam__title">Camera not available</p>
         <p className="webcam__note">This browser can’t share a camera</p>
       </div>
@@ -33,7 +33,7 @@ function Placeholder({ status, cameraEnabled, onEnable }: Pick<WebcamPreviewProp
   }
   if (status === 'denied' || status === 'error') {
     return (
-      <div className="webcam__placeholder">
+      <div className="webcam__prompt">
         <p className="webcam__title">{status === 'denied' ? 'Camera blocked' : 'Camera unavailable'}</p>
         <button type="button" className="webcam__button webcam__button--small" onClick={onEnable}>
           <RetryIcon />
@@ -44,12 +44,11 @@ function Placeholder({ status, cameraEnabled, onEnable }: Pick<WebcamPreviewProp
     );
   }
   return (
-    <div className="webcam__placeholder">
+    <div className="webcam__prompt">
       <button type="button" className="webcam__button" onClick={onEnable}>
         <CameraIcon />
         {cameraEnabled ? 'Enable camera' : 'Turn camera on'}
       </button>
-      <p className="webcam__note">Video stays on this device</p>
     </div>
   );
 }
@@ -68,7 +67,7 @@ export function WebcamPreview({ videoRef, overlayRef, status, mirror, cameraEnab
         aria-label="Your camera preview"
       />
       <HandOverlay ref={overlayRef} />
-      {!active && !simulated && <Placeholder status={status} cameraEnabled={cameraEnabled} onEnable={onEnable} />}
+      {!active && !simulated && <CameraPrompt status={status} cameraEnabled={cameraEnabled} onEnable={onEnable} />}
     </div>
   );
 }

@@ -2,10 +2,16 @@ import type { PuppetRig, Side } from '../types';
 import { clamp, lerp, normalize, type HandFeatures } from './handMath';
 import { facing, PUPPET, STAGE } from './puppetGeometry';
 
-/** Grip height that puts the feet exactly on the rail. */
-export const REST_Y = STAGE.railTop + PUPPET.pivotY * PUPPET.scale;
+/** Feet sit exactly on the rail top at this grip height. */
+const ON_RAIL_Y = STAGE.railTop + PUPPET.pivotY * PUPPET.scale;
 
-export const REST_X: Record<Side, number> = { left: 285, right: 715 };
+/** With no hand the puppets settle down behind the rail, lower legs hidden. */
+export const REST_Y = ON_RAIL_Y + 64;
+
+/** A held puppet is lifted into the scene: feet just clear of the rail. */
+const HELD_Y = ON_RAIL_Y - 16;
+
+export const REST_X: Record<Side, number> = { left: 255, right: 745 };
 
 /** Each puppet keeps to its half but may reach past the centre to meet the other. */
 const X_RANGE: Record<Side, readonly [number, number]> = { left: [130, 580], right: [420, 870] };
@@ -14,18 +20,18 @@ const X_RANGE: Record<Side, readonly [number, number]> = { left: [130, 580], rig
  * Closest the two puppets may come, measured at the grip and at the head
  * (which moves with the lean). Bodies and faces stay apart; hands can still meet.
  */
-const MIN_GRIP_GAP = 215;
-const MIN_HEAD_GAP = 228;
+const MIN_GRIP_GAP = 225;
+const MIN_HEAD_GAP = 240;
 /** Distance from the lean pivot (knees) up to the face, in puppet units. */
 const HEAD_LEVER = PUPPET.leanY + 370;
 
 /**
- * Hands map to a lift above the rail rather than to the full stage height.
- * Below LIFT_START (normalized, after sensitivity) the feet stay on the rail.
+ * Raising the hand above LIFT_START (normalized, after sensitivity) lifts the
+ * held puppet further; dropping it low lets the puppet sink toward the rail.
  */
-const MAX_LIFT = 135;
-const MAX_SINK = 22;
-const LIFT_START = 0.54;
+const MAX_LIFT = 90;
+const MAX_SINK = 34;
+const LIFT_START = 0.5;
 
 export const RIG_KEYS = [
   'x',
@@ -41,24 +47,36 @@ export const RIG_KEYS = [
   'depth',
 ] as const satisfies readonly (keyof PuppetRig)[];
 
+/** Each puppet rests in its own pose and breathes on its own clock, so they never move in lockstep. */
+const REST_POSE: Record<
+  Side,
+  { phase: number; tempo: number; lean: number; shoulder: number; elbow: number; wrist: number; backShoulder: number; backElbow: number }
+> = {
+  left: { phase: 0, tempo: 1, lean: -0.6, shoulder: 14, elbow: 28, wrist: 6, backShoulder: 4, backElbow: 22 },
+  right: { phase: 2.1, tempo: 0.87, lean: 1.2, shoulder: 24, elbow: 14, wrist: 12, backShoulder: -3, backElbow: 32 },
+};
+
 /**
- * Resting pose: grounded on the rail, facing the centre, front arm slightly
- * raised, breathing almost imperceptibly. `amplitude` scales the idle motion.
+ * Resting pose: settled low behind the rail, facing the centre, front arm
+ * slightly raised, breathing almost imperceptibly. `amplitude` scales the idle motion.
  */
 export function idleRig(side: Side, time: number, amplitude: number): PuppetRig {
-  const phase = side === 'left' ? 0 : 2.1;
+  const pose = REST_POSE[side];
+  const t = time * pose.tempo;
+  const p = pose.phase;
   const a = amplitude;
   return {
-    x: REST_X[side] + 2.5 * a * Math.sin(time * 0.17 + phase),
-    y: REST_Y + 1.6 * a * Math.sin(time * 0.9 + phase),
+    x: REST_X[side] + 2 * a * Math.sin(t * 0.17 + p),
+    y: REST_Y + 1.5 * a * Math.sin(t * 0.9 + p),
     scale: PUPPET.scale,
-    bodyRotation: a * (1.3 * Math.sin(time * 0.52 + phase) + 0.5 * Math.sin(time * 0.23 + phase * 1.7)),
-    headRotation: 1.2 * a * Math.sin(time * 0.37 + phase + 1),
-    shoulderAngle: 14 + 2.6 * a * Math.sin(time * 0.61 + phase),
-    elbowAngle: 26 + 3 * a * Math.sin(time * 0.47 + phase + 0.6),
-    wristAngle: 6 + 3 * a * Math.sin(time * 0.8 + phase),
-    backShoulderAngle: 4 + 2 * a * Math.sin(time * 0.43 + phase + 2),
-    backElbowAngle: 22 + 2.4 * a * Math.sin(time * 0.55 + phase),
+    bodyRotation: pose.lean + a * (0.9 * Math.sin(t * 0.52 + p) + 0.35 * Math.sin(t * 0.23 + p * 1.7)),
+    // The head trails the body's sway slightly.
+    headRotation: a * Math.sin(t * 0.52 + p - 0.9),
+    shoulderAngle: pose.shoulder + 2.2 * a * Math.sin(t * 0.61 + p),
+    elbowAngle: pose.elbow + 2.6 * a * Math.sin(t * 0.47 + p + 0.6),
+    wristAngle: pose.wrist + 2.5 * a * Math.sin(t * 0.8 + p),
+    backShoulderAngle: pose.backShoulder + 1.8 * a * Math.sin(t * 0.43 + p + 2),
+    backElbowAngle: pose.backElbow + 2 * a * Math.sin(t * 0.55 + p),
     depth: 0.15,
   };
 }
@@ -66,7 +84,8 @@ export function idleRig(side: Side, time: number, amplitude: number): PuppetRig 
 /**
  * Turns (already filtered) hand features into a target pose. The mapping is
  * deliberately artistic rather than literal:
- * - palm position moves the puppet within its half and lifts it off the rail
+ * - a held puppet is lifted out from behind the rail; palm position moves it
+ *   within its half and raising the hand lifts it higher
  * - hand tilt leans the body
  * - the index finger is the front arm: curl it to lower, extend it to raise,
  *   extend it alone to point
@@ -82,7 +101,7 @@ export function rigFromHand(features: HandFeatures, side: Side, sensitivity: num
   const [minX, maxX] = X_RANGE[side];
 
   const lift =
-    v < LIFT_START ? -MAX_LIFT * normalize(LIFT_START - v, 0, 0.44) : MAX_SINK * normalize(v - 0.72, 0, 0.22);
+    v < LIFT_START ? -MAX_LIFT * normalize(LIFT_START - v, 0, 0.4) : MAX_SINK * normalize(v - 0.7, 0, 0.25);
 
   const forwardTilt = f * features.tilt;
   const lean = clamp(forwardTilt * 0.35, -11, 11);
@@ -100,7 +119,7 @@ export function rigFromHand(features: HandFeatures, side: Side, sensitivity: num
 
   return {
     x: clamp(lerp(70, 930, u), minX, maxX),
-    y: REST_Y + lift,
+    y: HELD_Y + lift,
     scale: PUPPET.scale * (1 + lerp(-0.03, 0.06, depth)),
     bodyRotation: lean,
     headRotation: clamp(-lean * 0.3 + lerp(7, -3, features.pinch), -9, 9),

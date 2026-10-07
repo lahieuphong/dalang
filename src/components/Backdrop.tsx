@@ -2,78 +2,73 @@ import { memo } from 'react';
 
 /**
  * The page behind the theatre: layered warm gradients, faint kawung batik,
- * grain and vignette (in CSS), plus original mega-mendung-style cloud
- * ornaments in the corners, generated here as SVG.
+ * grain and vignette (in CSS), plus original Javanese-style cloud ornaments
+ * (in the spirit of mega mendung) framing the corners.
  *
- * Each cloud is a union of circular lobes drawn several times at shrinking
- * radii, which produces the concentric outline bands of Javanese cloud motifs;
- * spiral curls are traced on top.
+ * Each cloud is one flowing outline. Its concentric bands are drawn as
+ * progressively narrower strokes of the same outline, clipped to the inside,
+ * so every band follows the shape; spiral curls roll in at its ends.
  */
 
-interface Lobe {
+interface Spiral {
   x: number;
   y: number;
   r: number;
-}
-
-interface Curl extends Lobe {
   dir: 1 | -1;
   turns: number;
   start: number;
 }
 
 interface CloudSpec {
-  lobes: Lobe[];
-  curls: Curl[];
+  id: string;
+  outline: string;
+  spirals: Spiral[];
 }
 
-const LONG_CLOUD: CloudSpec = {
-  lobes: [
-    { x: 70, y: 150, r: 46 },
-    { x: 135, y: 112, r: 56 },
-    { x: 210, y: 92, r: 64 },
-    { x: 290, y: 108, r: 54 },
-    { x: 352, y: 140, r: 42 },
-    { x: 120, y: 168, r: 36 },
-    { x: 200, y: 162, r: 44 },
-    { x: 282, y: 164, r: 38 },
-  ],
-  curls: [
-    { x: 135, y: 114, r: 34, dir: -1, turns: 1.7, start: 0.5 },
-    { x: 210, y: 96, r: 41, dir: 1, turns: 1.9, start: 2.6 },
-    { x: 290, y: 110, r: 32, dir: 1, turns: 1.6, start: 0 },
-    { x: 70, y: 152, r: 26, dir: -1, turns: 1.45, start: 1.2 },
-    { x: 352, y: 142, r: 22, dir: 1, turns: 1.4, start: 3 },
-  ],
-};
-
-const ROUND_CLOUD: CloudSpec = {
-  lobes: [
-    { x: 80, y: 110, r: 50 },
-    { x: 150, y: 86, r: 58 },
-    { x: 212, y: 118, r: 42 },
-    { x: 132, y: 138, r: 40 },
-  ],
-  curls: [
-    { x: 150, y: 90, r: 39, dir: 1, turns: 2, start: 0.3 },
-    { x: 80, y: 112, r: 31, dir: -1, turns: 1.6, start: 2 },
-    { x: 212, y: 120, r: 25, dir: 1, turns: 1.5, start: 1 },
-  ],
-};
-
-/** Outer gold hairline, then alternating dark bands and gold lines toward the centre. */
-const BANDS = [
-  { grow: 7, fill: '#8d602f' },
-  { grow: 5, fill: '#1d0c05' },
-  { grow: -5, fill: '#7d5329' },
-  { grow: -7, fill: '#271207' },
-  { grow: -16, fill: '#6c4522' },
-  { grow: -18, fill: '#33190b' },
+const CLOUDS: CloudSpec[] = [
+  {
+    id: 'cloud-long',
+    outline:
+      'M40 150 C20 150 10 130 22 114 C30 102 50 100 58 110 C60 86 80 72 104 76 C116 50 150 38 178 50 C196 34 232 34 248 56 C270 50 296 62 300 84 C322 82 346 96 350 118 C372 120 386 138 376 152 C368 164 348 164 340 154 C300 166 250 158 210 162 C160 168 110 160 80 160 C64 164 48 160 40 150 Z',
+    spirals: [
+      { x: 42, y: 130, r: 17, dir: 1, turns: 1.7, start: 3.4 },
+      { x: 358, y: 138, r: 15, dir: -1, turns: 1.6, start: 0.2 },
+      { x: 186, y: 98, r: 26, dir: 1, turns: 1.9, start: 4.2 },
+    ],
+  },
+  {
+    id: 'cloud-round',
+    outline:
+      'M60 150 C36 150 26 124 44 108 C50 80 80 62 108 70 C124 44 166 40 186 62 C212 58 236 78 232 104 C252 112 256 140 236 150 C220 160 200 154 192 148 C160 160 110 158 84 152 C76 158 66 156 60 150 Z',
+    spirals: [
+      { x: 60, y: 130, r: 16, dir: 1, turns: 1.7, start: 3.2 },
+      { x: 224, y: 130, r: 15, dir: -1, turns: 1.6, start: 0 },
+      { x: 140, y: 102, r: 24, dir: -1, turns: 1.8, start: 1 },
+    ],
+  },
+  {
+    id: 'cloud-curl',
+    outline: 'M40 90 C18 90 10 64 28 50 C40 32 72 30 86 48 C104 44 122 56 118 76 C116 92 98 98 88 90 C76 98 56 98 40 90 Z',
+    spirals: [
+      { x: 56, y: 66, r: 17, dir: 1, turns: 1.8, start: 3.6 },
+      { x: 102, y: 74, r: 10, dir: -1, turns: 1.4, start: 0.4 },
+    ],
+  },
 ];
 
-function spiralPath({ x, y, r, dir, turns, start }: Curl): string {
-  const steps = 56;
-  const inner = r * 0.1;
+/** Concentric bands from the edge inward: [half stroke width, colour], widest first. */
+const BANDS: readonly (readonly [number, string])[] = [
+  [17.5, '#9a6a36'],
+  [16, '#5c2c14'],
+  [7, '#b07a40'],
+  [5.5, '#4e2410'],
+];
+const INNER_FILL = '#6a351a';
+const CONTOUR = '#140803';
+
+function spiralPath({ x, y, r, dir, turns, start }: Spiral): string {
+  const steps = 60;
+  const inner = r * 0.08;
   let d = '';
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
@@ -84,57 +79,76 @@ function spiralPath({ x, y, r, dir, turns, start }: Curl): string {
   return d;
 }
 
-function CloudShape({ id, spec }: { id: string; spec: CloudSpec }) {
+function CloudShape({ spec }: { spec: CloudSpec }) {
+  const clip = `${spec.id}-clip`;
   return (
-    <g id={id}>
-      {BANDS.map((band) => (
-        <g key={band.grow} fill={band.fill}>
-          {spec.lobes.map((lobe) =>
-            lobe.r + band.grow > 0 ? <circle key={`${lobe.x}-${lobe.y}`} cx={lobe.x} cy={lobe.y} r={lobe.r + band.grow} /> : null,
-          )}
-        </g>
-      ))}
-      <g fill="none" stroke="#a0713a" strokeWidth={2.2} strokeLinecap="round" opacity={0.85}>
-        {spec.curls.map((curl) => (
-          <path key={`${curl.x}-${curl.y}`} d={spiralPath(curl)} />
+    <g id={spec.id}>
+      <clipPath id={clip}>
+        <path d={spec.outline} />
+      </clipPath>
+      <path d={spec.outline} fill={INNER_FILL} />
+      <g clipPath={`url(#${clip})`} fill="none" strokeLinejoin="round">
+        {BANDS.map(([half, color]) => (
+          <path key={half} d={spec.outline} stroke={color} strokeWidth={half * 2} />
         ))}
+      </g>
+      <path d={spec.outline} fill="none" stroke={CONTOUR} strokeWidth={6} strokeLinejoin="round" />
+      <g fill="none" strokeLinecap="round">
+        {spec.spirals.map((spiral) => {
+          const d = spiralPath(spiral);
+          return (
+            <g key={`${spiral.x}-${spiral.y}`}>
+              <path d={d} stroke={CONTOUR} strokeWidth={4} />
+              <path d={d} stroke="#c08848" strokeWidth={1.4} />
+            </g>
+          );
+        })}
       </g>
     </g>
   );
 }
 
-const CORNERS = [
+interface Placement {
+  href: string;
+  transform: string;
+  opacity: number;
+}
+
+/** Each corner composition lives in a 620 × 440 box. */
+const CORNERS: { key: string; clouds: Placement[] }[] = [
   {
     key: 'tl',
     clouds: [
-      { href: '#cloud-long', transform: 'translate(-80 -70) scale(1.3)', opacity: 1 },
-      { href: '#cloud-round', transform: 'translate(320 0) scale(0.78)', opacity: 0.5 },
-      { href: '#cloud-long', transform: 'translate(0 205) scale(0.6)', opacity: 0.38 },
+      { href: '#cloud-round', transform: 'translate(330 120) scale(0.62)', opacity: 0.5 },
+      { href: '#cloud-curl', transform: 'translate(70 225) scale(0.95)', opacity: 0.45 },
+      { href: '#cloud-long', transform: 'translate(-40 -10) scale(1.2)', opacity: 1 },
     ],
   },
   {
     key: 'tr',
     clouds: [
-      { href: '#cloud-round', transform: 'translate(-40 -60) scale(1.45)', opacity: 1 },
-      { href: '#cloud-long', transform: 'translate(250 150) scale(0.7)', opacity: 0.45 },
+      { href: '#cloud-curl', transform: 'translate(80 235) scale(1)', opacity: 0.5 },
+      { href: '#cloud-round', transform: 'translate(150 -20) scale(1.45)', opacity: 1 },
     ],
   },
   {
     key: 'bl',
     clouds: [
-      { href: '#cloud-round', transform: 'translate(-60 170) scale(1.35)', opacity: 1 },
-      { href: '#cloud-long', transform: 'translate(200 260) scale(0.85)', opacity: 0.55 },
-      { href: '#cloud-round', transform: 'translate(40 40) scale(0.55)', opacity: 0.32 },
+      { href: '#cloud-curl', transform: 'translate(70 90) scale(1)', opacity: 0.5 },
+      { href: '#cloud-long', transform: 'translate(170 175) scale(1.05)', opacity: 0.85 },
+      { href: '#cloud-round', transform: 'translate(-60 120) scale(1.55)', opacity: 1 },
     ],
   },
   {
     key: 'br',
     clouds: [
-      { href: '#cloud-long', transform: 'translate(-30 200) scale(1.25)', opacity: 1 },
-      { href: '#cloud-round', transform: 'translate(300 90) scale(0.7)', opacity: 0.42 },
+      { href: '#cloud-round', transform: 'translate(300 80) scale(0.85)', opacity: 0.7 },
+      { href: '#cloud-long', transform: 'translate(-40 150) scale(1.4)', opacity: 1 },
     ],
   },
-] as const;
+];
+
+const CURLS = ['l', 'r'] as const;
 
 export const Backdrop = memo(function Backdrop() {
   return (
@@ -143,8 +157,9 @@ export const Backdrop = memo(function Backdrop() {
       <div className="backdrop__pattern" />
       <svg className="backdrop__defs" width="0" height="0">
         <defs>
-          <CloudShape id="cloud-long" spec={LONG_CLOUD} />
-          <CloudShape id="cloud-round" spec={ROUND_CLOUD} />
+          {CLOUDS.map((spec) => (
+            <CloudShape key={spec.id} spec={spec} />
+          ))}
         </defs>
       </svg>
       {CORNERS.map((corner) => (
@@ -152,6 +167,11 @@ export const Backdrop = memo(function Backdrop() {
           {corner.clouds.map((cloud, i) => (
             <use key={i} href={cloud.href} transform={cloud.transform} opacity={cloud.opacity} />
           ))}
+        </svg>
+      ))}
+      {CURLS.map((key) => (
+        <svg key={key} className={`clouds clouds--curl clouds--curl-${key}`} viewBox="0 0 130 110">
+          <use href="#cloud-curl" />
         </svg>
       ))}
       <div className="backdrop__grain" />

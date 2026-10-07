@@ -161,7 +161,7 @@ export function WayangExperience() {
     const { left, right } = engine.puppets;
     keepApart(left.prepareTarget(now, dt, amplitude), right.prepareTarget(now, dt, amplitude));
     for (const side of SIDES) {
-      sceneRef.current?.applyRig(side, engine.puppets[side].integrate(dt, settings), flicker);
+      sceneRef.current?.applyRig(side, engine.puppets[side].integrate(dt, settings), flicker, dt);
     }
 
     // Tell React how many puppets are held only once the number settles.

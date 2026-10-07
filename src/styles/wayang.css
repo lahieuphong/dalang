@@ -4,35 +4,40 @@
 
 :root {
   /* Palette */
-  --bg-deep: #1b0d07;
-  --bg-brown: #40200f;
-  --bg-warm: #6b3718;
-  --stage-paper: #eadca9;
-  --stage-light: #f8e8b8;
-  --stage-shadow: #9c7141;
-  --wood-dark: #241008;
-  --wood-mid: #4c2010;
-  --gold: #c99545;
-  --gold-light: #e3b85e;
-  --red: #9e2e27;
-  --blue: #234d70;
-  --cream: #f0ddad;
-  --text-cream: #f4e5be;
+  --dalang-bg-deep: #160a06;
+  --dalang-bg-brown: #45210f;
+  --dalang-bg-mid: #542814;
+  --dalang-bg-glow: #a45a25;
 
-  /* In-stage UI */
-  --ui-bg: rgba(27, 12, 5, 0.76);
-  --ui-border: rgba(227, 184, 94, 0.36);
-  --ui-border-strong: rgba(227, 184, 94, 0.72);
-  --ui-shadow: 0 6px 18px rgba(30, 12, 3, 0.38);
+  --dalang-screen-light: #f4e4b6;
+  --dalang-screen-mid: #eedba6;
+  --dalang-screen-warm: #dfc38b;
+  --dalang-screen-edge: #d6b57a;
+  --dalang-screen-corner: #c89f60;
 
-  /* Composition: the theatre fits the viewport height with room for the webcam card. */
-  --stage-w: min(94vw, max(320px, min(1080px, calc((100vh - 200px) * 1.163))));
-  --frame: clamp(7px, calc(var(--stage-w) * 0.0145), 15px);
-  --stage-radius: clamp(14px, calc(var(--stage-w) * 0.022), 24px);
-  --control-size: clamp(36px, calc(var(--stage-w) * 0.044), 46px);
-  --pill-font: clamp(11.5px, calc(var(--stage-w) * 0.0134), 14px);
-  --cam-w: clamp(176px, calc(var(--stage-w) * 0.3), 330px);
-  --cam-overlap: calc(var(--cam-w) * 0.1);
+  --dalang-frame-dark: #2b140c;
+  --dalang-frame-red: #68261b;
+  --dalang-gold: #c89a48;
+  --dalang-gold-light: #d5ae62;
+
+  --dalang-ui-dark: rgba(28, 18, 12, 0.88);
+  --dalang-ui-border: rgba(218, 182, 112, 0.28);
+  --dalang-ui-text: #eee2c5;
+  --dalang-amber: #e9a947;
+
+  /*
+   * Composition. The stage width is derived from the viewport height so that
+   * the theatre plus the webcam card (42% of the stage, at most 340px) fit:
+   * the first term applies while the card scales with the stage, the second
+   * once the card has reached its maximum size.
+   */
+  --stage-w: min(94vw, 1060px, max(320px, calc((100vh - 40px) / 1.096), calc((100vh - 231px) * 1.163)));
+  --frame: clamp(7px, calc(var(--stage-w) * 0.0135), 14px);
+  --stage-radius: clamp(14px, calc(var(--stage-w) * 0.022), 22px);
+  --control-size: clamp(40px, calc(var(--stage-w) * 0.062), 46px);
+  --pill-font: clamp(11.5px, calc(var(--stage-w) * 0.0165), 14px);
+  --cam-w: clamp(220px, calc(var(--stage-w) * 0.42), 340px);
+  --cam-tuck: 8px;
 
   /* Pointer parallax, -1..1 (set by useParallax) */
   --par-x: 0;
@@ -42,8 +47,8 @@
   font-family: 'Avenir Next', 'Segoe UI Variable Text', 'Segoe UI', 'Gill Sans', 'Helvetica Neue', system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.4;
-  color: var(--text-cream);
-  background: var(--bg-deep);
+  color: var(--dalang-ui-text);
+  background: var(--dalang-bg-deep);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -51,7 +56,7 @@
 
 @supports (height: 100svh) {
   :root {
-    --stage-w: min(94vw, max(320px, min(1080px, calc((100svh - 200px) * 1.163))));
+    --stage-w: min(94vw, 1060px, max(320px, calc((100svh - 40px) / 1.096), calc((100svh - 231px) * 1.163)));
   }
 }
 
@@ -65,7 +70,7 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: var(--bg-deep);
+  background: var(--dalang-bg-deep);
 }
 
 body {
@@ -74,6 +79,11 @@ body {
 
 button {
   font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(229, 196, 128, 0.85);
+  outline-offset: 3px;
 }
 
 .visually-hidden {
@@ -97,7 +107,7 @@ button {
   place-items: center;
   min-height: 100vh;
   min-height: 100svh;
-  padding: max(18px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(26px, env(safe-area-inset-bottom))
+  padding: max(18px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom))
     max(12px, env(safe-area-inset-left));
   /* The lamp halo around the theatre may bleed past the viewport; never let it scroll. */
   overflow-x: hidden;
@@ -123,22 +133,23 @@ button {
   overflow: hidden;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 58% 52% at 50% 42%, rgba(156, 86, 36, 0.5) 0%, rgba(107, 55, 24, 0.22) 42%, transparent 72%),
-    radial-gradient(ellipse 125% 100% at 50% 40%, #5a2d13 0%, #3d1d0d 36%, #241109 64%, #130804 100%);
+    radial-gradient(ellipse 60% 52% at 50% 42%, rgba(164, 90, 37, 0.6) 0%, rgba(139, 75, 32, 0.3) 34%, rgba(84, 40, 20, 0.1) 58%, transparent 76%),
+    linear-gradient(180deg, rgba(10, 4, 2, 0.3) 0%, transparent 26%, transparent 70%, rgba(10, 4, 2, 0.34) 100%),
+    radial-gradient(ellipse 130% 105% at 50% 42%, var(--dalang-bg-mid) 0%, var(--dalang-bg-brown) 32%, #2c150a 62%, var(--dalang-bg-deep) 100%);
 }
 
 .backdrop__glow {
   position: absolute;
   inset: -20%;
-  background: radial-gradient(circle at 50% 46%, rgba(244, 172, 92, 0.16), transparent 42%);
-  animation: glow-drift 38s ease-in-out infinite alternate;
+  background: radial-gradient(circle at 50% 44%, rgba(214, 128, 58, 0.14), transparent 40%);
+  animation: glow-drift 40s ease-in-out infinite alternate;
 }
 
 .backdrop__pattern {
   position: absolute;
   inset: 0;
   background: url('../assets/textures/kawung.svg') center / 64px 64px repeat;
-  opacity: 0.06;
+  opacity: 0.045;
   -webkit-mask-image: radial-gradient(ellipse 80% 75% at 50% 45%, transparent 30%, #000 78%);
   mask-image: radial-gradient(ellipse 80% 75% at 50% 45%, transparent 30%, #000 78%);
 }
@@ -150,36 +161,59 @@ button {
 .clouds {
   --depth: 3;
   position: absolute;
-  width: clamp(280px, 40vw, 660px);
   height: auto;
-  opacity: 0.92;
-  filter: drop-shadow(0 12px 30px rgba(0, 0, 0, 0.4));
   transform: translate3d(calc(var(--par-x) * var(--depth) * 1px), calc(var(--par-y) * var(--depth) * 1px), 0);
   transition: transform 1.8s cubic-bezier(0.2, 0.7, 0.2, 1);
-  will-change: transform;
+  filter: drop-shadow(0 14px 28px rgba(8, 3, 1, 0.45));
+}
+
+.clouds--tl,
+.clouds--tr {
+  width: clamp(250px, 26vw, 520px);
+  top: -2%;
 }
 
 .clouds--tl {
   --depth: 4;
-  top: -7%;
-  left: -8%;
+  left: -3%;
 }
 
 .clouds--tr {
-  top: -9%;
-  right: -10%;
+  right: -3%;
   scale: -1 1;
 }
 
+.clouds--bl,
+.clouds--br {
+  width: clamp(300px, 34vw, 680px);
+  bottom: -3%;
+}
+
 .clouds--bl {
-  bottom: -10%;
-  left: -9%;
+  left: -4%;
 }
 
 .clouds--br {
   --depth: 4;
-  bottom: -8%;
-  right: -8%;
+  right: -4%;
+  scale: -1 1;
+}
+
+/* Small curls that tie the lower cloud masses together around the webcam. */
+.clouds--curl {
+  --depth: 5;
+  width: clamp(70px, 8vw, 150px);
+  opacity: 0.8;
+}
+
+.clouds--curl-l {
+  left: 25%;
+  bottom: 2%;
+}
+
+.clouds--curl-r {
+  right: 24%;
+  bottom: 5%;
   scale: -1 1;
 }
 
@@ -187,20 +221,21 @@ button {
   position: absolute;
   inset: 0;
   background: url('../assets/textures/grain.svg') 0 0 / 220px 220px repeat;
-  opacity: 0.12;
+  opacity: 0.09;
   mix-blend-mode: overlay;
 }
 
 .backdrop__vignette {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 44%, rgba(8, 3, 1, 0.5) 80%, rgba(4, 1, 0, 0.82) 100%);
+  background: radial-gradient(ellipse 90% 85% at 50% 45%, transparent 46%, rgba(8, 3, 1, 0.45) 78%, rgba(4, 1, 0, 0.8) 100%);
 }
 
 /* --------------------------------------------------------------- Theatre */
 
 .theater {
   position: relative;
+  z-index: 2;
   width: var(--stage-w);
 }
 
@@ -208,9 +243,9 @@ button {
 .theater::before {
   content: '';
   position: absolute;
-  inset: -14% -10%;
+  inset: -12% -9%;
   z-index: -1;
-  background: radial-gradient(ellipse 50% 50% at 50% 48%, rgba(240, 168, 86, 0.22), transparent 70%);
+  background: radial-gradient(ellipse 50% 50% at 50% 48%, rgba(212, 132, 58, 0.2), transparent 70%);
   pointer-events: none;
 }
 
@@ -220,19 +255,19 @@ button {
   border-radius: var(--stage-radius);
   background:
     url('../assets/textures/floral.svg') 0 0 / var(--frame) var(--frame) round,
-    linear-gradient(155deg, #622a14 0%, #37140a 34%, #4c1d0d 62%, #260c05 100%);
+    linear-gradient(155deg, #5a2412 0%, #33130a 34%, #461b0d 62%, #240b05 100%);
   box-shadow:
-    inset 0 0 0 1px rgba(242, 202, 124, 0.6),
+    inset 0 0 0 1px rgba(232, 192, 118, 0.55),
     inset 0 0 0 2.5px #2b0e06,
-    0 0 0 1px rgba(0, 0, 0, 0.6),
-    0 34px 80px -22px rgba(0, 0, 0, 0.85),
-    0 10px 30px rgba(0, 0, 0, 0.45);
+    0 0 0 1px rgba(0, 0, 0, 0.55),
+    0 22px 54px rgba(0, 0, 0, 0.36),
+    0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
 .theater__corner {
   position: absolute;
   z-index: 2;
-  width: clamp(22px, calc(var(--frame) * 2.9), 42px);
+  width: clamp(20px, calc(var(--frame) * 2.8), 38px);
   aspect-ratio: 1;
   pointer-events: none;
 }
@@ -272,30 +307,45 @@ button {
   aspect-ratio: 1000 / 860;
   overflow: hidden;
   border-radius: max(6px, calc(var(--stage-radius) - var(--frame) * 0.7));
-  background: #e6d09a;
+  background: var(--dalang-screen-mid);
   box-shadow:
-    0 0 0 1.5px #d6a656,
+    0 0 0 1.5px #c9984c,
     0 0 0 calc(1.5px + var(--frame) * 0.2) #2b0d06;
 }
 
+/* Parchment lit from behind: warm centre, ochre edges. */
 .screen__paper {
   position: absolute;
   inset: 0;
   background:
-    url('../assets/textures/paper.svg') 0 0 / 320px 320px repeat,
-    radial-gradient(ellipse 62% 54% at 50% 36%, #fcf3d4 0%, #f6e7ba 30%, rgba(240, 222, 170, 0) 68%),
-    radial-gradient(ellipse 104% 92% at 50% 40%, #f0dead 0%, #e4ca92 44%, #caa66b 76%, #9c7140 100%);
-  background-blend-mode: multiply, normal, normal;
+    radial-gradient(ellipse 58% 50% at 50% 36%, rgba(255, 245, 210, 0.7) 0%, rgba(249, 235, 194, 0.32) 42%, rgba(249, 235, 194, 0) 70%),
+    radial-gradient(
+      ellipse 108% 98% at 50% 40%,
+      var(--dalang-screen-light) 0%,
+      var(--dalang-screen-mid) 38%,
+      var(--dalang-screen-warm) 62%,
+      var(--dalang-screen-edge) 80%,
+      var(--dalang-screen-corner) 100%
+    );
 }
 
-/* The blencong lamp's glow; breathes very slowly like a living flame. */
+.screen__paper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('../assets/textures/paper.svg') 0 0 / 320px 320px repeat;
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+}
+
+/* The blencong lamp's glow; breathes very slowly, felt more than seen. */
 .screen__lamp {
   position: absolute;
-  inset: -8%;
-  background: radial-gradient(circle at 50% 33%, rgba(255, 247, 218, 0.62) 0%, rgba(255, 236, 190, 0.26) 24%, transparent 50%);
+  inset: -6%;
+  background: radial-gradient(circle at 50% 34%, rgba(255, 248, 222, 0.42) 0%, rgba(255, 238, 196, 0.16) 26%, transparent 50%);
   mix-blend-mode: screen;
-  transform-origin: 50% 33%;
-  animation: lamp-breathe 12s ease-in-out infinite alternate;
+  transform-origin: 50% 34%;
+  animation: lamp-breathe 14s ease-in-out infinite alternate;
 }
 
 .scene {
@@ -309,28 +359,29 @@ button {
 .scene__tassel {
   transform-box: view-box;
   transform-origin: 500px 46px;
-  animation: tassel-sway 7.5s ease-in-out infinite alternate;
+  animation: tassel-sway 7s ease-in-out infinite alternate;
 }
 
 .screen__vignette {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse 82% 78% at 50% 42%, transparent 58%, rgba(112, 62, 24, 0.2) 100%);
+  background: radial-gradient(ellipse 84% 80% at 50% 42%, transparent 60%, rgba(120, 70, 28, 0.16) 100%);
   box-shadow:
-    inset 0 0 calc(var(--stage-w) * 0.07) rgba(96, 54, 20, 0.55),
-    inset 0 0 calc(var(--stage-w) * 0.014) rgba(60, 28, 8, 0.5);
+    inset 0 0 calc(var(--stage-w) * 0.06) rgba(110, 64, 24, 0.42),
+    inset 0 0 calc(var(--stage-w) * 0.012) rgba(60, 28, 8, 0.45);
 }
 
 /* -------------------------------------------------------------- Controls */
 
 .controls {
   position: absolute;
-  top: 9%;
-  right: 2.4%;
-  z-index: 4;
+  /* Just below the carved valance (6% of the screen). */
+  top: calc(6% + clamp(10px, calc(var(--stage-w) * 0.022), 22px));
+  right: clamp(12px, calc(var(--stage-w) * 0.024), 24px);
+  z-index: 5;
   display: flex;
-  gap: calc(var(--control-size) * 0.24);
+  gap: clamp(8px, calc(var(--stage-w) * 0.012), 12px);
 }
 
 .control {
@@ -339,47 +390,40 @@ button {
   width: var(--control-size);
   height: var(--control-size);
   padding: 0;
-  border-radius: 50%;
-  color: var(--text-cream);
-  background: radial-gradient(circle at 34% 28%, rgba(88, 45, 22, 0.94), rgba(28, 12, 5, 0.92) 72%);
-  border: 1px solid var(--ui-border);
-  box-shadow:
-    0 4px 12px rgba(40, 16, 4, 0.42),
-    inset 0 1px 0 rgba(255, 225, 170, 0.14);
+  border-radius: 999px;
+  color: #f2e6c8;
+  background: rgba(39, 25, 17, 0.88);
+  border: 1px solid rgba(220, 188, 126, 0.2);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.24);
   cursor: pointer;
   transition:
-    transform 0.18s cubic-bezier(0.3, 0.7, 0.3, 1.25),
-    border-color 0.2s ease,
-    color 0.2s ease;
+    transform 150ms ease-out,
+    background-color 150ms ease-out,
+    border-color 150ms ease-out;
   -webkit-tap-highlight-color: transparent;
 }
 
 .control svg {
-  width: 46%;
-  height: 46%;
+  width: 44%;
+  height: 44%;
 }
 
 .control:hover {
   transform: scale(1.06);
-  border-color: var(--ui-border-strong);
+  background: rgba(54, 35, 23, 0.92);
+  border-color: rgba(220, 188, 126, 0.34);
 }
 
 .control:active {
   transform: scale(0.95);
 }
 
-.control:focus-visible {
-  outline: 2px solid var(--gold-light);
-  outline-offset: 3px;
-}
-
 .control[aria-pressed='true'] {
-  color: var(--gold-light);
-  border-color: rgba(227, 184, 94, 0.62);
+  color: var(--dalang-gold-light);
 }
 
 .control[aria-expanded='true'] {
-  border-color: var(--ui-border-strong);
+  border-color: rgba(220, 188, 126, 0.4);
 }
 
 .control:disabled {
@@ -394,29 +438,27 @@ button {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  width: min(266px, 80vw);
-  padding: 14px 16px 16px;
+  width: min(256px, 78vw);
+  padding: 13px 15px 15px;
   border-radius: 14px;
-  color: var(--text-cream);
+  color: var(--dalang-ui-text);
   font-size: 13px;
   text-align: left;
-  background: rgba(33, 15, 7, 0.86);
-  -webkit-backdrop-filter: blur(12px) saturate(1.15);
-  backdrop-filter: blur(12px) saturate(1.15);
-  border: 1px solid var(--ui-border);
-  box-shadow:
-    0 18px 44px rgba(10, 4, 1, 0.55),
-    inset 0 1px 0 rgba(255, 225, 170, 0.08);
-  animation: settings-in 0.2s ease-out both;
+  background: rgba(31, 20, 13, 0.94);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--dalang-ui-border);
+  box-shadow: 0 14px 36px rgba(8, 3, 1, 0.45);
+  animation: settings-in 0.18s ease-out both;
 }
 
 .settings__title {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--gold-light);
+  color: var(--dalang-gold-light);
 }
 
 .settings__row {
@@ -430,12 +472,11 @@ button {
   text-align: left;
   background: none;
   border: 0;
-  border-bottom: 1px solid rgba(227, 184, 94, 0.12);
+  border-bottom: 1px solid rgba(218, 182, 112, 0.12);
   cursor: pointer;
 }
 
 .settings__row:focus-visible {
-  outline: 2px solid var(--gold-light);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -451,8 +492,8 @@ button {
   width: 32px;
   height: 18px;
   border-radius: 999px;
-  background: rgba(240, 221, 173, 0.14);
-  border: 1px solid rgba(227, 184, 94, 0.32);
+  background: rgba(238, 226, 197, 0.12);
+  border: 1px solid rgba(218, 182, 112, 0.3);
   transition: background 0.2s ease;
 }
 
@@ -463,19 +504,19 @@ button {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #cdb88c;
+  background: #cbb68b;
   transition:
     transform 0.2s cubic-bezier(0.3, 0.7, 0.3, 1.2),
     background 0.2s ease;
 }
 
 [aria-checked='true'] .switch {
-  background: rgba(201, 149, 69, 0.6);
+  background: rgba(200, 154, 72, 0.6);
 }
 
 [aria-checked='true'] .switch__knob {
   transform: translateX(14px);
-  background: #fde9b6;
+  background: #fbe8b8;
 }
 
 .settings__slider {
@@ -501,7 +542,7 @@ button {
 .settings input[type='range']::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 4px;
-  background: linear-gradient(90deg, var(--gold) var(--fill), rgba(240, 221, 173, 0.18) var(--fill));
+  background: linear-gradient(90deg, var(--dalang-gold) var(--fill), rgba(238, 226, 197, 0.16) var(--fill));
 }
 
 .settings input[type='range']::-webkit-slider-thumb {
@@ -509,8 +550,8 @@ button {
   height: 14px;
   margin-top: -5px;
   border-radius: 50%;
-  background: #fde9b6;
-  border: 2px solid var(--gold);
+  background: #fbe8b8;
+  border: 2px solid var(--dalang-gold);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   -webkit-appearance: none;
   appearance: none;
@@ -519,26 +560,25 @@ button {
 .settings input[type='range']::-moz-range-track {
   height: 4px;
   border-radius: 4px;
-  background: rgba(240, 221, 173, 0.18);
+  background: rgba(238, 226, 197, 0.16);
 }
 
 .settings input[type='range']::-moz-range-progress {
   height: 4px;
   border-radius: 4px;
-  background: var(--gold);
+  background: var(--dalang-gold);
 }
 
 .settings input[type='range']::-moz-range-thumb {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #fde9b6;
-  border: 2px solid var(--gold);
+  background: #fbe8b8;
+  border: 2px solid var(--dalang-gold);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 
 .settings input[type='range']:focus-visible {
-  outline: 2px solid var(--gold-light);
   outline-offset: 3px;
   border-radius: 6px;
 }
@@ -555,54 +595,54 @@ button {
 
 .status {
   position: absolute;
-  left: 2.4%;
-  bottom: 2.5%;
+  left: clamp(12px, calc(var(--stage-w) * 0.026), 26px);
+  bottom: clamp(10px, calc(var(--stage-w) * 0.022), 22px);
   z-index: 4;
   display: inline-flex;
   align-items: center;
   gap: 0.6em;
-  max-width: 46%;
-  padding: 0.52em 1.05em 0.52em 0.85em;
+  max-width: calc(100% - 2 * clamp(12px, calc(var(--stage-w) * 0.026), 26px));
+  height: clamp(28px, calc(var(--stage-w) * 0.042), 36px);
+  padding: 0 clamp(11px, calc(var(--stage-w) * 0.018), 16px) 0 clamp(10px, calc(var(--stage-w) * 0.015), 14px);
   font-size: var(--pill-font);
-  line-height: 1.2;
-  letter-spacing: 0.012em;
-  color: var(--text-cream);
-  background: var(--ui-bg);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  border: 1px solid var(--ui-border);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--dalang-ui-text);
+  background: rgba(25, 17, 12, 0.88);
+  border: 1px solid var(--dalang-ui-border);
   border-radius: 999px;
-  box-shadow: var(--ui-shadow);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 
 .status__dot {
   flex: none;
-  width: 0.56em;
-  height: 0.56em;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: #c9a06a;
-  box-shadow: 0 0 0.5em rgba(227, 184, 94, 0.35);
+  background: #c99b5c;
+  box-shadow: 0 0 6px rgba(233, 169, 71, 0.35);
   transition:
     background 0.3s ease,
     box-shadow 0.3s ease;
 }
 
 .status--live .status__dot {
-  background: #f2b24f;
+  background: var(--dalang-amber);
   box-shadow:
-    0 0 0 0.22em rgba(242, 178, 79, 0.18),
-    0 0 0.8em rgba(242, 178, 79, 0.75);
+    0 0 0 3px rgba(233, 169, 71, 0.16),
+    0 0 9px rgba(233, 169, 71, 0.7);
   animation: dot-pulse 2.4s ease-in-out infinite;
 }
 
 .status--busy .status__dot {
-  background: #e3b85e;
+  background: var(--dalang-amber);
   animation: dot-breathe 1.1s ease-in-out infinite alternate;
 }
 
 .status--alert .status__dot {
-  background: #d4694c;
-  box-shadow: 0 0 0.6em rgba(212, 105, 76, 0.6);
+  background: #cf7356;
+  box-shadow: 0 0 7px rgba(207, 115, 86, 0.5);
 }
 
 .status__text {
@@ -618,30 +658,28 @@ button {
 }
 
 .status__line--in {
-  animation: status-in 0.22s ease-out both;
+  animation: status-in 0.2s ease-out both;
 }
 
 .status__line--out {
-  animation: status-out 0.22s ease-in both;
+  animation: status-out 0.2s ease-in both;
 }
 
 /* ---------------------------------------------------------------- Webcam */
 
+/* Tucked just under the theatre's lower edge, which overlaps it slightly. */
 .webcam {
   container: webcam / inline-size;
   position: relative;
-  z-index: 2;
+  z-index: 1;
   width: var(--cam-w);
   aspect-ratio: 16 / 9;
-  margin-top: calc(var(--cam-overlap) * -1);
+  margin-top: calc(var(--cam-tuck) * -1);
   overflow: hidden;
-  border-radius: clamp(12px, calc(var(--cam-w) * 0.05), 17px);
-  background: radial-gradient(ellipse at 50% 40%, #2d160a, #120703 76%);
-  border: 1px solid rgba(227, 184, 94, 0.4);
-  box-shadow:
-    0 0 0 4px rgba(22, 9, 4, 0.88),
-    0 0 0 5px rgba(227, 184, 94, 0.14),
-    0 24px 46px -12px rgba(0, 0, 0, 0.75);
+  border-radius: clamp(12px, calc(var(--cam-w) * 0.05), 16px);
+  background: radial-gradient(ellipse at 50% 40%, #2b170c, #130905 76%);
+  border: 1px solid rgba(218, 182, 112, 0.26);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
 }
 
 .webcam__video {
@@ -650,7 +688,7 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  background: #120703;
+  background: #130905;
   opacity: 0;
   transition: opacity 0.6s ease;
 }
@@ -671,76 +709,61 @@ button {
   pointer-events: none;
 }
 
-.webcam__placeholder {
+.webcam__prompt {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 10px;
+  gap: 8px;
+  padding: calc(var(--cam-tuck) + 6px) 10px 10px;
   text-align: center;
-  background:
-    radial-gradient(ellipse at 50% 120%, rgba(201, 149, 69, 0.14), transparent 60%),
-    url('../assets/textures/kawung.svg') center / 40px 40px repeat;
-  background-blend-mode: normal;
+  background: radial-gradient(ellipse at 50% 120%, rgba(200, 154, 72, 0.14), transparent 60%);
   animation: fade-in 0.4s ease both;
-}
-
-.webcam__placeholder::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: rgba(18, 7, 3, 0.9);
 }
 
 .webcam__button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 17px 9px 13px;
+  height: 36px;
+  padding: 0 16px 0 13px;
   border-radius: 999px;
-  color: var(--text-cream);
+  color: var(--dalang-ui-text);
   font-size: 13.5px;
   font-weight: 500;
-  letter-spacing: 0.02em;
   white-space: nowrap;
-  background: linear-gradient(180deg, rgba(112, 57, 25, 0.96), rgba(58, 25, 10, 0.96));
-  border: 1px solid rgba(227, 184, 94, 0.62);
-  box-shadow:
-    0 6px 16px rgba(0, 0, 0, 0.42),
-    inset 0 1px 0 rgba(255, 225, 170, 0.2);
+  background: rgba(39, 25, 17, 0.92);
+  border: 1px solid rgba(218, 182, 112, 0.42);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.3);
   cursor: pointer;
   transition:
-    transform 0.18s cubic-bezier(0.3, 0.7, 0.3, 1.25),
-    border-color 0.2s ease;
+    transform 150ms ease-out,
+    background-color 150ms ease-out,
+    border-color 150ms ease-out;
   -webkit-tap-highlight-color: transparent;
 }
 
 .webcam__button svg {
   width: 17px;
   height: 17px;
-  color: var(--gold-light);
+  color: var(--dalang-gold-light);
 }
 
 .webcam__button:hover {
   transform: scale(1.04);
-  border-color: var(--gold-light);
+  background: rgba(54, 35, 23, 0.95);
+  border-color: rgba(218, 182, 112, 0.65);
 }
 
 .webcam__button:active {
   transform: scale(0.95);
 }
 
-.webcam__button:focus-visible {
-  outline: 2px solid var(--gold-light);
-  outline-offset: 3px;
-}
-
 .webcam__button--small {
-  padding: 6px 13px 6px 10px;
+  height: 30px;
+  padding: 0 13px 0 10px;
   font-size: 12.5px;
 }
 
@@ -762,11 +785,11 @@ button {
 }
 
 .webcam__spinner {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  border: 2px solid rgba(227, 184, 94, 0.22);
-  border-top-color: var(--gold-light);
+  border: 2px solid rgba(218, 182, 112, 0.22);
+  border-top-color: var(--dalang-gold-light);
   animation: spin 0.9s linear infinite;
 }
 
@@ -783,7 +806,7 @@ button {
   color: #f4e5be;
   font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background: rgba(12, 6, 3, 0.84);
-  border: 1px solid rgba(227, 184, 94, 0.3);
+  border: 1px solid rgba(218, 182, 112, 0.3);
   pointer-events: none;
 }
 
@@ -797,44 +820,37 @@ button {
 
 @keyframes glow-drift {
   from {
-    transform: translate3d(-2.5%, 1.5%, 0) scale(1);
+    transform: translate3d(-2%, 1%, 0) scale(1);
   }
   to {
-    transform: translate3d(2.5%, -1.5%, 0) scale(1.05);
+    transform: translate3d(2%, -1%, 0) scale(1.04);
   }
 }
 
 @keyframes lamp-breathe {
   0% {
-    opacity: 0.86;
+    opacity: 0.95;
     transform: scale(1);
   }
-  22% {
-    opacity: 0.93;
+  38% {
+    opacity: 0.98;
+    transform: scale(1.008);
   }
-  41% {
-    opacity: 0.89;
-    transform: scale(1.015);
-  }
-  63% {
-    opacity: 0.97;
-  }
-  81% {
-    opacity: 0.91;
-    transform: scale(1.006);
+  71% {
+    opacity: 0.965;
   }
   100% {
     opacity: 1;
-    transform: scale(1.022);
+    transform: scale(1.014);
   }
 }
 
 @keyframes tassel-sway {
   from {
-    transform: rotate(-1.1deg);
+    transform: rotate(-1.3deg);
   }
   to {
-    transform: rotate(1.1deg);
+    transform: rotate(1.3deg);
   }
 }
 
@@ -842,13 +858,13 @@ button {
   0%,
   100% {
     box-shadow:
-      0 0 0 0.22em rgba(242, 178, 79, 0.18),
-      0 0 0.8em rgba(242, 178, 79, 0.75);
+      0 0 0 3px rgba(233, 169, 71, 0.16),
+      0 0 9px rgba(233, 169, 71, 0.7);
   }
   50% {
     box-shadow:
-      0 0 0 0.38em rgba(242, 178, 79, 0.06),
-      0 0 1.1em rgba(242, 178, 79, 0.9);
+      0 0 0 5px rgba(233, 169, 71, 0.05),
+      0 0 12px rgba(233, 169, 71, 0.85);
   }
 }
 
@@ -899,57 +915,52 @@ button {
 @media (max-width: 640px) {
   :root {
     --stage-w: 95vw;
-    --frame: clamp(6px, 1.9vw, 9px);
-    --control-size: clamp(34px, 9.6vw, 40px);
-    --pill-font: clamp(10.5px, 2.9vw, 12.5px);
-    --cam-w: clamp(176px, 56vw, 280px);
-  }
-
-  .clouds {
-    width: clamp(220px, 72vw, 420px);
+    --frame: clamp(6px, 1.8vw, 9px);
+    --stage-radius: clamp(14px, 4.2vw, 18px);
+    --control-size: clamp(38px, 10vw, 40px);
+    --pill-font: clamp(11px, 3vw, 12.5px);
+    --cam-w: clamp(190px, 58vw, 280px);
+    --cam-tuck: 6px;
   }
 
   .clouds--tl,
   .clouds--tr {
-    top: -4%;
+    width: clamp(200px, 62vw, 340px);
+    top: -3%;
   }
 
-  /* On phones the pill needs the full rail, so the webcam card sits just below the stage. */
-  .status {
-    max-width: 95%;
+  .clouds--bl,
+  .clouds--br {
+    width: clamp(240px, 78vw, 420px);
+    bottom: -4%;
   }
 
-  .webcam {
-    margin-top: 12px;
+  .clouds--curl-l {
+    left: 6%;
+    bottom: 18%;
+    width: 18vw;
   }
 
-  .controls {
-    top: 8.4%;
-  }
-}
-
-/* Short screens: keep the stage readable, give the pill the whole rail, let the page scroll. */
-@media (max-height: 600px) {
-  .status {
-    max-width: 95%;
-  }
-
-  .webcam {
-    margin-top: 12px;
+  .clouds--curl-r {
+    right: 6%;
+    bottom: 22%;
+    width: 18vw;
   }
 }
 
+/* Short landscape screens: keep the stage readable and let the page scroll. */
 @media (max-height: 520px) and (orientation: landscape) {
   :root {
     --stage-w: min(94vw, max(340px, calc((100vh - 110px) * 1.163)));
-    --cam-w: clamp(176px, calc(var(--stage-w) * 0.34), 240px);
+    --cam-w: clamp(190px, calc(var(--stage-w) * 0.42), 260px);
   }
 }
 
-/* A small webcam card trims its placeholder to the essentials. */
+/* A small webcam card trims its prompt to the essentials. */
 @container webcam (max-width: 230px) {
   .webcam__button {
-    padding: 7px 13px 7px 11px;
+    height: 32px;
+    padding: 0 13px 0 11px;
     font-size: 12.5px;
   }
 

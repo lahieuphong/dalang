@@ -51,6 +51,35 @@ function Line({ d, color = INK, width = 0.9, opacity }: { d: string; color?: str
   );
 }
 
+/** Sunggingan: a darker band just inside an outline, clipped so it never spills outside. */
+function Band({ id, d, color, width = 7, opacity = 0.5 }: { id: string; d: string; color: string; width?: number; opacity?: number }) {
+  return (
+    <>
+      <clipPath id={id}>
+        <path d={d} />
+      </clipPath>
+      <path d={d} fill="none" stroke={color} strokeWidth={width} opacity={opacity} clipPath={`url(#${id})`} />
+    </>
+  );
+}
+
+const TORSO =
+  'M10 -306 C-8 -308 -28 -308 -44 -303 C-52 -300 -52 -290 -46 -280 C-38 -266 -30 -248 -24 -230 L20 -232 C27 -248 38 -264 48 -278 C54 -288 56 -298 50 -304 C42 -307 36 -307 30 -307 Z';
+const NECK =
+  'M12 -305 C18 -318 26 -332 34 -344 L52 -336 C44 -326 36 -316 32 -305 Z';
+const SATRIA_FACE =
+  'M26 -394 L54 -396 C67 -384 83 -369 102 -355 C96 -350 90 -349 85 -350 C86 -347 87 -345 85 -343 L81 -342 C84 -340 84 -338 81 -336 C79 -333 77 -331 72 -331 C62 -331 50 -330 40 -334 L30 -344 C24 -360 22 -378 26 -394 Z';
+const RAJA_FACE =
+  'M27 -397 L52 -399 C61 -392 70 -381 80 -370 C88 -363 98 -358 108 -359 C107 -353 101 -350 93 -350 C92 -346 92 -343 89 -341 L84 -340 C86 -337 85 -333 81 -331 C71 -328 55 -328 42 -333 L31 -344 C25 -360 23 -381 27 -397 Z';
+const UPPER_ARM =
+  'M-11 -1 C-11 -15 11 -15 11 -1 C10 34 7 74 6 104 C6 112 -6 112 -6 104 C-7 74 -10 34 -11 -1 Z';
+const FOREARM =
+  'M-6 -6 C-6 28 -5 64 -4 98 C-4 104 4 104 4 98 C5 64 6 28 6 -6 C6 -12 -6 -12 -6 -6 Z';
+const SHIN_BACK =
+  'M-55 -84 C-59 -62 -59 -42 -56 -22 L-45 -22 C-43 -42 -40 -62 -37 -84 Z';
+const SHIN_FRONT =
+  'M61 -84 C63 -62 66 -42 66 -22 L78 -22 C80 -42 80 -64 80 -84 Z';
+
 const drop = (x: number, y: number, size = 1) =>
   `M${x} ${y} c${-2 * size} ${3 * size} ${-2 * size} ${6 * size} 0 ${8 * size} c${2 * size} ${-2 * size} ${2 * size} ${-5 * size} 0 ${-8 * size}z`;
 
@@ -89,18 +118,38 @@ export function PuppetDefs({ p, pal }: { p: string; pal: PuppetPalette }) {
         <stop offset="1" stopColor={pal.accent.base} />
       </linearGradient>
       <linearGradient id={`${p}-rod`} x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stopColor="#0d0502" />
-        <stop offset="0.4" stopColor="#4a2b18" />
-        <stop offset="1" stopColor="#100603" />
+        <stop offset="0" stopColor="#120a06" />
+        <stop offset="0.42" stopColor="#4a3020" />
+        <stop offset="1" stopColor="#160d08" />
       </linearGradient>
-      {/* Parang batik: diagonal rows of S-shaped bands. */}
-      <pattern id={`${p}-kain`} width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(-40)">
-        <rect width="16" height="16" fill={pal.kain.base} />
-        <path d={wave} fill="none" stroke={pal.kain.motif} strokeWidth="2.8" />
-        <path d={wave} fill="none" stroke={pal.kain.base} strokeWidth="0.9" />
-        <circle cx="4" cy="13.4" r="1.05" fill={pal.kain.motif} />
-        <circle cx="12" cy="2.6" r="1.05" fill={pal.kain.motif} />
-      </pattern>
+      <linearGradient id={`${p}-crest`} x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor={pal.crest} stopOpacity="0.85" />
+        <stop offset="1" stopColor={pal.crest} />
+      </linearGradient>
+      {pal.kain.pattern === 'parang' ? (
+        /* Parang batik: diagonal rows of S-shaped bands. */
+        <pattern id={`${p}-kain`} width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(-40)">
+          <rect width="16" height="16" fill={pal.kain.base} />
+          <path d={wave} fill="none" stroke={pal.kain.motif} strokeWidth="2.8" />
+          <path d={wave} fill="none" stroke={pal.kain.base} strokeWidth="0.9" />
+          <circle cx="4" cy="13.4" r="1.05" fill={pal.kain.motif} />
+          <circle cx="12" cy="2.6" r="1.05" fill={pal.kain.motif} />
+        </pattern>
+      ) : (
+        /* Kawung batik: four-petal palm-fruit motif on a diagonal grid. */
+        <pattern id={`${p}-kain`} width="13" height="13" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="13" height="13" fill={pal.kain.base} />
+          <g fill={pal.kain.motif}>
+            <ellipse cx="6.5" cy="2.9" rx="2" ry="2.9" />
+            <ellipse cx="6.5" cy="10.1" rx="2" ry="2.9" />
+            <ellipse cx="2.9" cy="6.5" rx="2.9" ry="2" />
+            <ellipse cx="10.1" cy="6.5" rx="2.9" ry="2" />
+          </g>
+          <circle cx="6.5" cy="6.5" r="0.9" fill={pal.kain.base} />
+          <circle cx="0" cy="0" r="1" fill={pal.kain.motif} />
+          <circle cx="13" cy="13" r="1" fill={pal.kain.motif} />
+        </pattern>
+      )}
       {/* Cindhe: small lozenges for the trousers. */}
       <pattern id={`${p}-cindhe`} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
         <rect width="7" height="7" fill={pal.trousers.base} />
@@ -166,8 +215,8 @@ export function BodyArt({ p, pal, sil }: ArtProps) {
       {!sil && <Line d="M-27 -233 C-52 -221 -82 -196 -106 -160" color={pal.gold[0]} width={1.1} opacity={0.8} />}
 
       {/* Shins and feet */}
-      <Shape sil={sil} fill={limb} d="M-55 -84 C-59 -62 -59 -42 -56 -22 L-45 -22 C-43 -42 -40 -62 -37 -84 Z" />
-      <Shape sil={sil} fill={limb} d="M61 -84 C63 -62 66 -42 66 -22 L78 -22 C80 -42 80 -64 80 -84 Z" />
+      <Shape sil={sil} fill={limb} d={SHIN_BACK} />
+      <Shape sil={sil} fill={limb} d={SHIN_FRONT} />
       <Shape
         sil={sil}
         fill={gold}
@@ -180,6 +229,8 @@ export function BodyArt({ p, pal, sil }: ArtProps) {
       />
       {!sil && (
         <>
+          <Band id={`${p}-shin-b-band`} d={SHIN_BACK} color={pal.gold[2]} width={5} />
+          <Band id={`${p}-shin-f-band`} d={SHIN_FRONT} color={pal.gold[2]} width={5} />
           <Line d="M-41 -70 C-42 -56 -44 -44 -46 -32" opacity={0.4} width={0.7} />
           <Line d="M77 -72 C77 -58 76 -46 75 -34" opacity={0.4} width={0.7} />
           <Line d="M-15 -3.5 L-14 0 M-21 -5 L-20 0 M-27 -6.5 L-26 0" width={0.7} opacity={0.7} />
@@ -225,14 +276,16 @@ export function BodyArt({ p, pal, sil }: ArtProps) {
       )}
 
       {/* Neck and frontal V-shaped torso with broad shoulders */}
-      <Shape sil={sil} fill={limb} d="M12 -305 C18 -318 26 -332 34 -344 L52 -336 C44 -326 36 -316 32 -305 Z" />
+      <Shape sil={sil} fill={limb} d={NECK} />
       <Shape
         sil={sil}
         fill={gold}
-        d="M10 -306 C-8 -308 -28 -308 -44 -303 C-52 -300 -52 -290 -46 -280 C-38 -266 -30 -248 -24 -230 L20 -232 C27 -248 38 -264 48 -278 C54 -288 56 -298 50 -304 C42 -307 36 -307 30 -307 Z"
+        d={TORSO}
       />
       {!sil && (
         <>
+          <Band id={`${p}-torso-band`} d={TORSO} color={pal.gold[2]} width={9} />
+          <Band id={`${p}-neck-band`} d={NECK} color={pal.gold[2]} width={5} />
           <Line d="M48 -284 C38 -275 26 -273 14 -277" opacity={0.45} width={0.8} />
           <Line d="M-40 -284 C-30 -276 -18 -274 -6 -277" opacity={0.3} width={0.8} />
           <Line d="M6 -276 C6 -264 5 -252 3 -240" opacity={0.25} width={0.8} />
@@ -315,13 +368,10 @@ export function GapitArt({ p, sil }: { p: string; sil: boolean }) {
 /* Heads                                                                     */
 /* ------------------------------------------------------------------------ */
 
-/** Heads are drawn a touch large and scaled down about the neck pin. */
-const HEAD_SCALE = 'translate(40 -336) scale(0.92) translate(-40 336)';
-
 export function SatriaHead({ p, pal, sil }: ArtProps) {
   const gold = `url(#${p}-gold)`;
   return (
-    <g transform={HEAD_SCALE}>
+    <g>
       <Shape sil={sil} fill={pal.hair} d="M28 -398 C12 -394 5 -378 8 -361 C10 -349 18 -339 30 -336 L36 -346 C28 -360 26 -380 30 -396 Z" />
       {/* Gelung supit urang: hair bun with two backward "shrimp claw" curls */}
       <Shape
@@ -362,10 +412,11 @@ export function SatriaHead({ p, pal, sil }: ArtProps) {
       <Shape
         sil={sil}
         fill={`url(#${p}-face)`}
-        d="M26 -394 L54 -396 C67 -384 83 -369 102 -355 C96 -350 90 -349 85 -350 C86 -347 87 -345 85 -343 L81 -342 C84 -340 84 -338 81 -336 C79 -333 77 -331 72 -331 C62 -331 50 -330 40 -334 L30 -344 C24 -360 22 -378 26 -394 Z"
+        d={SATRIA_FACE}
       />
       {!sil && (
         <>
+          <Band id={`${p}-face-band`} d={SATRIA_FACE} color={pal.face[1]} width={7} opacity={0.6} />
           <Line d="M57 -391 C69 -380 84 -367 98 -357" color={pal.faceLight} width={2.4} opacity={0.55} />
           <Line d="M89 -352.5 C91 -354.5 94 -354.5 95.5 -352.5" />
           <Line d="M80.5 -342.3 L86 -343.4" />
@@ -413,7 +464,7 @@ export function SatriaHead({ p, pal, sil }: ArtProps) {
 export function RajaHead({ p, pal, sil }: ArtProps) {
   const gold = `url(#${p}-gold)`;
   return (
-    <g transform={HEAD_SCALE}>
+    <g>
       <Shape sil={sil} fill={pal.hair} d="M28 -398 C12 -394 5 -378 8 -361 C10 -349 18 -339 30 -336 L36 -346 C28 -360 26 -380 30 -396 Z" />
       {/* Loose curling hair down the back */}
       <Shape
@@ -429,7 +480,7 @@ export function RajaHead({ p, pal, sil }: ArtProps) {
       {/* Plume sweeping back from the crown */}
       <Shape
         sil={sil}
-        fill={`url(#${p}-accent)`}
+        fill={`url(#${p}-crest)`}
         d="M22 -436 C6 -447 -16 -449 -33 -439 C-44 -431 -47 -416 -40 -405 C-35 -412 -26 -417 -16 -417 C-5 -417 8 -414 20 -409 Z"
       />
       {/* Makutha crown, its peak curling backward */}
@@ -459,7 +510,7 @@ export function RajaHead({ p, pal, sil }: ArtProps) {
           ].map(([x, y]) => (
             <circle key={x} cx={x} cy={y} r={2.8} fill={pal.jewel} stroke={pal.gold[0]} strokeWidth={0.8} />
           ))}
-          <Line d="M17 -447 C30 -452 46 -450 60 -443" color={pal.accent.base} width={3.6} />
+          <Line d="M17 -447 C30 -452 46 -450 60 -443" color={pal.crest} width={3.6} />
           <Dots d="M18 -447.2 C30 -451.8 46 -449.8 59 -443.4" color={pal.gold[0]} size={1.4} gap={3.4} />
           <Line d="M18 -462 C24 -470 32 -474 40 -472" color={pal.kain.base} width={2.4} />
           <Line d="M30 -416 C27 -436 28 -456 32 -470" opacity={0.35} width={0.7} />
@@ -478,10 +529,11 @@ export function RajaHead({ p, pal, sil }: ArtProps) {
       <Shape
         sil={sil}
         fill={`url(#${p}-face)`}
-        d="M27 -397 L52 -399 C61 -392 70 -381 80 -370 C88 -363 98 -358 108 -359 C107 -353 101 -350 93 -350 C92 -346 92 -343 89 -341 L84 -340 C86 -337 85 -333 81 -331 C71 -328 55 -328 42 -333 L31 -344 C25 -360 23 -381 27 -397 Z"
+        d={RAJA_FACE}
       />
       {!sil && (
         <>
+          <Band id={`${p}-face-band`} d={RAJA_FACE} color={pal.face[1]} width={7} opacity={0.6} />
           <Line d="M55 -394 C64 -385 72 -375 82 -367 C90 -361 98 -360 104 -360" color={pal.faceLight} width={2.4} opacity={0.5} />
           <circle cx={68} cy={-371} r={5.4} fill="#f6ead0" stroke={INK} strokeWidth={1.2} />
           <circle cx={70.2} cy={-371} r={2.7} fill={INK} />
@@ -537,12 +589,13 @@ export function UpperArmArt({ p, pal, sil, far }: LimbProps) {
       <Shape
         sil={sil}
         fill={far ? `url(#${p}-shade)` : `url(#${p}-limb)`}
-        d="M-11 -1 C-11 -15 11 -15 11 -1 C10 34 7 74 6 104 C6 112 -6 112 -6 104 C-7 74 -10 34 -11 -1 Z"
+        d={UPPER_ARM}
       />
       {/* Kelat bahu armband with a small naga wing */}
       <Shape sil={sil} fill={`url(#${p}-gold)`} d="M-9 16 C-17 10 -24 10 -30 4 C-28 13 -22 20 -10 27 Z" />
       {!sil && (
         <>
+          <Band id={`${p}-${far ? 'b' : 'f'}-upper-band`} d={UPPER_ARM} color={far ? pal.goldShade[1] : pal.gold[2]} width={6} />
           <path d="M-12 18 C-17 14.5 -21 13.5 -25 10 C-22.5 16 -18 19.5 -12 23 Z" fill={pal.accent.base} />
           <path d="M-10.6 15 C-4 13 4 12 10.4 13 L9.7 30 C3 29 -3 30 -9.9 32 Z" fill={pal.accent.base} stroke={INK} strokeWidth={0.9} />
           <Line d="M-10.4 16.5 C-4 14.5 4 13.5 10.3 14.5" color={pal.gold[0]} width={1.4} />
@@ -562,10 +615,11 @@ export function ForearmArt({ p, pal, sil, far }: LimbProps) {
       <Shape
         sil={sil}
         fill={far ? `url(#${p}-shade)` : `url(#${p}-limb)`}
-        d="M-6 -6 C-6 28 -5 64 -4 98 C-4 104 4 104 4 98 C5 64 6 28 6 -6 C6 -12 -6 -12 -6 -6 Z"
+        d={FOREARM}
       />
       {!sil && (
         <>
+          <Band id={`${p}-${far ? 'b' : 'f'}-fore-band`} d={FOREARM} color={far ? pal.goldShade[1] : pal.gold[2]} width={4} />
           <path d="M-5.4 82 L5.4 82 L4.9 95 L-4.9 95 Z" fill={`url(#${p}-gold)`} stroke={INK} strokeWidth={0.8} />
           <Line d="M-5.1 88.5 L5.1 88.5" color={pal.accent.base} width={2} />
           <circle r={2.6} fill={pal.gold[2]} stroke={INK} strokeWidth={0.8} />
@@ -598,7 +652,7 @@ export function HandArt({ p, sil, far }: LimbProps) {
 
 /** A tuding arm rod, tied to the palm at (0, 0) and running down past the rail. */
 export function RodArt({ p, pal, sil, length }: ArtProps & { length: number }) {
-  const d = `M-1.3 0 L1.3 0 L2.7 ${length} L-2.7 ${length} Z`;
+  const d = `M-1.6 0 L1.6 0 L3.1 ${length} L-3.1 ${length} Z`;
   if (sil) {
     return (
       <g>

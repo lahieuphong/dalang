@@ -16,10 +16,11 @@ interface HandStyle {
   tip: string;
 }
 
+/** Warm, decorative styling: cream bones, peach joints, muted coral fingertips. */
 const STYLES: Record<Side | 'none', HandStyle> = {
-  left: { joint: '#eba45c', tip: '#d9705e' },
-  right: { joint: '#e79a82', tip: '#c95c70' },
-  none: { joint: '#c9a27a', tip: '#b88a6a' },
+  left: { joint: 'rgba(235, 194, 129, 0.95)', tip: 'rgba(218, 85, 88, 0.9)' },
+  right: { joint: 'rgba(235, 194, 129, 0.95)', tip: 'rgba(218, 85, 88, 0.9)' },
+  none: { joint: 'rgba(235, 194, 129, 0.55)', tip: 'rgba(218, 85, 88, 0.5)' },
 };
 
 export interface OverlayViewport {
@@ -71,18 +72,18 @@ function drawHand(
   const points = hand.landmarks.map((p) => project(p.x, p.y));
 
   // A soft dark underlay keeps the cream skeleton legible on bright skin.
-  ctx.strokeStyle = 'rgba(28, 12, 5, 0.45)';
-  ctx.lineWidth = 3.4 * unit;
+  ctx.strokeStyle = 'rgba(28, 12, 5, 0.35)';
+  ctx.lineWidth = 3.6 * unit;
   strokeSkeleton(ctx, points);
-  ctx.strokeStyle = 'rgba(246, 228, 186, 0.92)';
-  ctx.lineWidth = 1.5 * unit;
+  ctx.strokeStyle = 'rgba(241, 213, 163, 0.85)';
+  ctx.lineWidth = 1.8 * unit;
   strokeSkeleton(ctx, points);
 
   for (let i = 0; i < points.length; i++) {
     const [x, y] = points[i];
     const tip = FINGERTIPS.has(i);
     ctx.beginPath();
-    ctx.arc(x, y, (tip ? 3.1 : 2.3) * unit, 0, Math.PI * 2);
+    ctx.arc(x, y, (tip ? 2.6 : 2.1) * unit, 0, Math.PI * 2);
     ctx.fillStyle = tip ? style.tip : style.joint;
     ctx.fill();
     ctx.lineWidth = 0.9 * unit;

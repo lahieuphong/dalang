@@ -27,8 +27,9 @@ The camera needs a secure context: `localhost` or HTTPS.
 
 | Your hand                         | The puppet                                  |
 | --------------------------------- | ------------------------------------------- |
+| Show a hand                       | Lifts its puppet up from behind the rail    |
 | Move left / right                 | Walks across its half of the stage          |
-| Raise high                        | Lifts off the rail                          |
+| Raise high / lower                | Lifts the puppet higher / lets it sink      |
 | Tilt                              | Leans forward or back                       |
 | Curl / extend the index finger    | Lowers / raises the front arm               |
 | Point with the index alone        | Points the front arm at the other puppet    |
@@ -85,9 +86,11 @@ webcam ──► MediaPipe HandLandmarker (≈28 Hz, GPU with CPU fallback)
   We feed it the raw frame, so the labels are swapped back in
   `lib/handTracker.ts`. Landmarks are then mirrored into view space, so the
   overlay canvas is never flipped.
-- **Transitions.** When a hand is lost, its pose is held for 380 ms, then the
-  puppet eases back to a breathing rest pose. A new hand eases the puppet up
-  from rest; puppets never teleport.
+- **Transitions.** Without a hand, a puppet rests low with its lower legs
+  hidden behind the rail. When a hand appears, the puppet is lifted into the
+  scene over about 400 ms. When a hand is lost, its pose is held for 380 ms,
+  then the puppet eases back down to its breathing rest pose. Puppets never
+  teleport.
 - **Shadows.** Each puppet is rendered twice. The second copy is a flat
   silhouette that goes through a Gaussian blur. It is offset away from the lamp
   and scaled around it, so the shadow grows and softens as the puppet nears the

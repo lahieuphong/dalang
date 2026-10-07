@@ -21,9 +21,7 @@ export function stageStatus({ camera, tracking, hands, cameraEnabled, simulated 
 
   switch (camera) {
     case 'unsupported':
-      return { text: 'Camera not supported · puppets resting', tone: 'alert' };
     case 'denied':
-      return { text: 'Camera unavailable · interaction paused', tone: 'alert' };
     case 'error':
       return { text: 'Camera unavailable', tone: 'alert' };
     case 'requesting':
