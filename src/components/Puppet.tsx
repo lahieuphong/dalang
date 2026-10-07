@@ -45,6 +45,7 @@ interface ArmProps {
 function Arm({ arm, far, p, pal, sil, initial, setRef }: ArmProps) {
   const upper: GroupKey = far ? 'backUpper' : 'frontUpper';
   const fore: GroupKey = far ? 'backFore' : 'frontFore';
+  const fingers: GroupKey = far ? 'backFingers' : 'frontFingers';
   return (
     <g transform={`translate(${arm.shoulder.x} ${arm.shoulder.y})`}>
       <g ref={setRef(upper)} transform={initial[upper]}>
@@ -54,10 +55,10 @@ function Arm({ arm, far, p, pal, sil, initial, setRef }: ArmProps) {
             <ForearmArt p={p} pal={pal} sil={sil} far={far} />
             <g transform={`translate(0 ${arm.fore})`}>
               {far ? (
-                <HandArt p={p} pal={pal} sil={sil} far />
+                <HandArt p={p} pal={pal} sil={sil} far fingersRef={setRef(fingers)} fingersTransform={initial[fingers]} />
               ) : (
                 <g ref={setRef('frontHand')} transform={initial.frontHand}>
-                  <HandArt p={p} pal={pal} sil={sil} far={false} />
+                  <HandArt p={p} pal={pal} sil={sil} far={false} fingersRef={setRef(fingers)} fingersTransform={initial[fingers]} />
                 </g>
               )}
             </g>

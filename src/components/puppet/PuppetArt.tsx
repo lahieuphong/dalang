@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import type { PuppetPalette } from './palettes';
 
 /**
@@ -630,22 +631,35 @@ export function ForearmArt({ p, pal, sil, far }: LimbProps) {
   );
 }
 
-/** A long, elegant wayang hand: four fingers held together, thumb turned out. */
-export function HandArt({ p, sil, far }: LimbProps) {
+interface HandArtProps extends LimbProps {
+  /** The four-finger blade's group, curled at the knuckles by the rig. */
+  fingersRef?: Ref<SVGGElement>;
+  fingersTransform?: string;
+}
+
+/**
+ * A long, elegant wayang hand: four fingers held together as one blade that
+ * can curl at the knuckles, and a thumb turned out from the palm.
+ */
+export function HandArt({ p, sil, far, fingersRef, fingersTransform }: HandArtProps) {
+  const fill = far ? `url(#${p}-shade)` : `url(#${p}-limb)`;
   return (
     <g>
+      <g ref={fingersRef} transform={fingersTransform}>
+        <Shape sil={sil} fill={fill} d="M-5.6 19.5 C-4.5 34 -2 46 2 56 C3.5 59 6.5 58 6.8 54 C7 44 6.5 32 6.1 19.5 Z" />
+        {!sil && (
+          <>
+            <Line d="M-1.6 24 C-0.6 36 0.8 46 3.2 54" width={0.55} opacity={0.5} />
+            <Line d="M1.8 23 C2.8 34 3.8 44 5 52" width={0.55} opacity={0.5} />
+          </>
+        )}
+      </g>
       <Shape
         sil={sil}
-        fill={far ? `url(#${p}-shade)` : `url(#${p}-limb)`}
-        d="M-4.5 -3 C-6 6 -6.5 14 -5.5 22 C-4.5 34 -2 46 2 56 C3.5 59 6.5 58 6.8 54 C7 44 6.5 32 6 22 C9 21 13 22 17.5 25 C19.5 26 20 24 18.5 22.5 C14 18 9.5 12 5.5 6 C5 2 4.5 -1 4.5 -3 Z"
+        fill={fill}
+        d="M-4.5 -3 C-6 6 -6.5 14 -5.5 22 L6 22 C9 21 13 22 17.5 25 C19.5 26 20 24 18.5 22.5 C14 18 9.5 12 5.5 6 C5 2 4.5 -1 4.5 -3 Z"
       />
-      {!sil && (
-        <>
-          <Line d="M-1.6 24 C-0.6 36 0.8 46 3.2 54" width={0.55} opacity={0.5} />
-          <Line d="M1.8 23 C2.8 34 3.8 44 5 52" width={0.55} opacity={0.5} />
-          <Line d="M7 21 C10 20.5 13.5 21.5 16.5 23.5" width={0.55} opacity={0.45} />
-        </>
-      )}
+      {!sil && <Line d="M7 21 C10 20.5 13.5 21.5 16.5 23.5" width={0.55} opacity={0.45} />}
     </g>
   );
 }

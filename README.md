@@ -25,17 +25,23 @@ The camera needs a secure context: `localhost` or HTTPS.
 
 ## Playing
 
-| Your hand                         | The puppet                                  |
-| --------------------------------- | ------------------------------------------- |
-| Show a hand                       | Lifts its puppet up from behind the rail    |
-| Move left / right                 | Walks across its half of the stage          |
-| Raise high / lower                | Lifts the puppet higher / lets it sink      |
-| Tilt                              | Leans forward or back                       |
-| Curl / extend the index finger    | Lowers / raises the front arm               |
-| Point with the index alone        | Points the front arm at the other puppet    |
-| Open / close the other fingers    | Raises / lowers the back arm                |
-| Spread the thumb                  | Flicks the front wrist                      |
-| Pinch thumb and index             | Bows the head                               |
+Every finger drives its own joint, continuously; there are no gesture
+thresholds to cross before something happens.
+
+| Your hand                         | The puppet                                       |
+| --------------------------------- | ------------------------------------------------ |
+| Show a hand                       | Lifts its puppet up from behind the rail         |
+| Move left / right                 | Walks across its half of the stage               |
+| Raise high / lower                | Lifts the puppet higher / lets it sink           |
+| Roll the wrist                    | Leans the body forward or back                   |
+| **Index**: curl / extend / aim    | Front shoulder: lowers / raises / aims the arm   |
+| Index alone (others curled)       | Points the front arm at the other puppet         |
+| **Middle**: curl                  | Bends the front elbow                            |
+| **Thumb**: spread / curl          | Turns the front wrist                            |
+| **Thumb–index pinch**             | Precise grip: wrist turns in, forearm draws in, fingers close, head nods |
+| **Ring**: extend                  | Raises the back arm                              |
+| **Pinky**: extend                 | Straightens the back elbow                       |
+| Close the whole hand              | Compacts both arms, the puppet's hands close     |
 | Bring the hand toward the camera  | Draws the puppet toward the lamp (bigger, softer shadow) |
 
 Your left hand drives the left puppet and your right hand drives the right one.
@@ -51,31 +57,44 @@ a puppet is picked up. Sound is off by default and only starts after you click.
 ## How it works
 
 ```
-webcam ──► MediaPipe HandLandmarker (≈28 Hz, GPU with CPU fallback)
-             │  21 landmarks + handedness per hand, mirrored into view space
-             ▼
-         HandAssigner            stable hand → puppet pairing
-             ▼
-         extractHandFeatures     palm, tilt, finger extension, pinch, size
-             ▼
-         One Euro filters        removes tremor, keeps fast moves responsive
-             ▼
-         rigFromHand             artistic mapping to a target pose, clamped
-             ▼
-         PuppetController        idle/hand blend, grace period, secondary motion,
-                                 damped springs at 60 fps
-             ▼
-         Puppet (SVG rig)        transforms set directly on SVG groups
+webcam (960×540, up to 60 fps)
+   │  requestVideoFrameCallback: each fresh frame, once
+   ▼
+HandTracker            MediaPipe HandLandmarker (GPU, CPU fallback), adaptive
+                       rate within a main-thread budget; 21 landmarks per hand
+   ▼
+HandAssigner           stable hand → puppet pairing
+   ▼
+extractHandFeatures    all 21 landmarks: per-finger extension / curl / direction,
+                       thumb spread, pinch, finger spread, roll, pitch, fist, depth
+   ▼
+HandFeatureFilter      spike guard + per-channel One Euro filters
+   ▼
+articulateFromHand     each finger → its own puppet joint (continuous)
+stagePosition          palm (predicted ~35 ms ahead) → puppet position
+   ▼
+PuppetController       fast primary springs + loose secondary physics
+   ▼
+Puppet (SVG rig)       transforms set directly on SVG groups, 60 fps
 ```
 
 - **A single loop.** `WayangExperience` runs one `requestAnimationFrame` loop.
   Per-frame data lives in refs and plain objects. React state only holds
   coarse UI state: camera status, model status, the number of hands held, and
   settings.
-- **Inference throttling.** `HandTracker` runs detection at most ~28 times a
-  second. It never processes the same video frame twice and only runs once the
-  video has data. Between detections, the springs keep animating at display
-  rate.
+- **Fresh frames first.** The camera is asked for 960×540 at up to 60 fps
+  (it falls back to 720p30 or anything available; the actual mode is shown in
+  debug). `HandTracker` runs MediaPipe from `requestVideoFrameCallback`, once
+  per new camera frame and never twice at once, so the render loop picks up
+  the result in the same frame. A running time budget keeps inference under
+  about half of the main thread; without frame callbacks it falls back to
+  polling from the render loop.
+- **Primary vs secondary motion.** Palm position and finger articulation are
+  the puppeteer's intent: fast per-channel One Euro filters, a one-frame spike
+  guard, short palm prediction and stiff, nearly critically damped springs.
+  Physical character (arms trailing a move, flinging on a lift, the body
+  leaning into travel, the shadow lagging) is a separate loose layer added on
+  top, so it never delays control.
 - **Stable assignment.** `HandAssigner` works like a mirror: a newly raised
   hand takes the puppet on its side of the preview, so your right hand moves
   the puppet on the right of the screen. MediaPipe handedness only breaks ties
@@ -87,7 +106,7 @@ webcam ──► MediaPipe HandLandmarker (≈28 Hz, GPU with CPU fallback)
   handedness label is the user's physical hand.
 - **Transitions.** Without a hand, a puppet rests low with its lower legs
   hidden behind the rail. When a hand appears, the puppet is lifted into the
-  scene over about 400 ms. When a hand is lost, its pose is held for 380 ms,
+  scene in about 150 ms. When a hand is lost, its pose is held for 380 ms,
   then the puppet eases back down to its breathing rest pose. Puppets never
   teleport.
 - **Shadows.** Each puppet is rendered twice. The second copy is a flat
@@ -111,7 +130,7 @@ src/
     SettingsPopover.tsx, StatusPill.tsx, DebugPanel.tsx, icons.tsx
   hooks/                  useCamera, useHandTracking, useAnimationFrame,
                           usePreferences, useParallax
-  lib/                    handMath, handAssignment, handTracker, landmarker,
+  lib/                    handMath, handFeatureFilter, handAssignment, handTracker, landmarker,
                           puppetGeometry, puppetMapping, puppetMotion,
                           smoothing, drawHands, ambientAudio, status, settings,
                           simulatedHands
@@ -121,8 +140,10 @@ src/
 
 ## Developer flags
 
-- `?debug=1` shows inference FPS, handedness, the hand-to-puppet assignment,
-  each puppet's last palm position and the live features.
+- `?debug=1` shows the camera mode and frame rate, inference rate and cost,
+  the age of the latest result, the hand-to-puppet assignment, and for each
+  held puppet a bar per finger (extension and curl), pinch, fist, roll, pitch,
+  palm position and velocity.
 - `?simulate=1` drives the puppets with synthetic, scripted hands, so you can
   work without a camera. Combine both flags as `?simulate=1&debug=1`.
 

@@ -11,7 +11,7 @@ export interface HandTracking {
 
 /**
  * Loads the shared MediaPipe HandLandmarker while `enabled` and exposes a
- * throttled tracker for the render loop. Per-frame hand data never touches
+ * tracker that the render loop attaches to the video and reads from. Per-frame hand data never touches
  * React state; only the coarse loading status does.
  */
 export function useHandTracking(enabled: boolean): HandTracking {
@@ -30,6 +30,7 @@ export function useHandTracking(enabled: boolean): HandTracking {
         if (cancelled) return;
         trackerRef.current = new HandTracker(landmarker, (error) => {
           if (import.meta.env.DEV) console.warn('[hand-tracking] inference keeps failing, rebuilding on CPU', error);
+          trackerRef.current?.dispose();
           trackerRef.current = null;
           discardHandLandmarker();
           setGeneration((value) => value + 1);
@@ -45,6 +46,7 @@ export function useHandTracking(enabled: boolean): HandTracking {
 
     return () => {
       cancelled = true;
+      trackerRef.current?.dispose();
       trackerRef.current = null;
       lease.release();
       setStatus('idle');

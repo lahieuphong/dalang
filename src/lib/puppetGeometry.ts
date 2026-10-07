@@ -33,6 +33,8 @@ export const PUPPET = {
   front: { shoulder: { x: 46, y: -297 }, upper: 108, fore: 102, grip: 18 } satisfies ArmGeometry,
   back: { shoulder: { x: -42, y: -295 }, upper: 108, fore: 102, grip: 18 } satisfies ArmGeometry,
   rodLength: 560,
+  /** Where the four-finger blade hinges on the palm, in hand coordinates. */
+  knuckle: { x: 0.3, y: 21 },
 } as const;
 
 /** +1 when the puppet faces right (stage left puppet), -1 when it faces left. */
@@ -72,6 +74,8 @@ export interface RigTransforms {
   frontHand: string;
   backUpper: string;
   backFore: string;
+  frontFingers: string;
+  backFingers: string;
   frontRod: string;
   backRod: string;
 }
@@ -91,6 +95,8 @@ export function rigTransforms(side: Side, rig: PuppetRig): RigTransforms {
     frontHand: `rotate(${f(-rig.wristAngle)})`,
     backUpper: `rotate(${f(-rig.backShoulderAngle)})`,
     backFore: `rotate(${f(-rig.backElbowAngle)})`,
+    frontFingers: `rotate(${f(-rig.frontFingerCurl)} ${PUPPET.knuckle.x} ${PUPPET.knuckle.y})`,
+    backFingers: `rotate(${f(-rig.backFingerCurl)} ${PUPPET.knuckle.x} ${PUPPET.knuckle.y})`,
     frontRod: `translate(${f(frontGrip.x)} ${f(frontGrip.y)}) rotate(${f(rodRotation(frontGrip, rig.bodyRotation, 26))})`,
     backRod: `translate(${f(backGrip.x)} ${f(backGrip.y)}) rotate(${f(rodRotation(backGrip, rig.bodyRotation, -26))})`,
   };

@@ -1,89 +1,109 @@
-import type { HandDetection, PuppetRig, Settings, Side } from '../types';
-import { clamp, extractHandFeatures, lerp, smoothstep, type HandFeatures } from './handMath';
+import type { HandDetection, HandFeatures, PuppetRig, Settings, Side } from '../types';
+import { HandFeatureFilter } from './handFeatureFilter';
+import { clamp, extractHandFeatures, lerp, smoothstep } from './handMath';
 import { facing } from './puppetGeometry';
-import { blendRig, idleRig, RIG_KEYS, rigFromHand } from './puppetMapping';
-import { OneEuroFilter, stepSpring, type SpringParams } from './smoothing';
+import { articulateFromHand, blendRig, emptyRig, idleRig, RIG_KEYS, stagePosition } from './puppetMapping';
+import { stepSpring, type SpringParams } from './smoothing';
 
 /** Keep the last tracked pose this long after a hand drops out, so brief misses never flicker. */
 export const GRACE_MS = 380;
-/** Engagement (0 = idle pose, 1 = hand pose) change per second. */
-const PICKUP_RATE = 3.4;
+/** Engagement (0 = idle pose, 1 = hand pose) per second: grab fast (~110 ms), let go gently. */
+const PICKUP_RATE = 9;
 const RELEASE_RATE = 1.5;
-/** The little hop-and-wave when a hand first picks a puppet up lasts about half a second. */
-const FLOURISH_RATE = 2.2;
+
+/**
+ * Palm prediction hides part of the camera + inference latency by
+ * extrapolating the filtered palm to the moment of rendering. It is short,
+ * clamped, and switched off just after pickup or when the hand reverses.
+ */
+const PREDICT_MAX_MS = 35;
+const PREDICT_WARMUP_MS = 150;
+const PREDICT_MAX_SHIFT = 0.035;
 
 type RigKey = (typeof RIG_KEYS)[number];
-type FeatureKey = keyof HandFeatures;
 
-/** One Euro [minCutoff Hz, beta] per feature, tuned to each feature's units. */
-const FEATURE_FILTERS: Record<FeatureKey, readonly [number, number]> = {
-  palmX: [1.2, 10],
-  palmY: [1.2, 10],
-  tilt: [1, 0.05],
-  indexDeflection: [1, 0.05],
-  indexExtension: [1.6, 2],
-  openness: [1.6, 2],
-  thumbSpread: [1.4, 1.6],
-  pinch: [1.6, 2],
-  size: [0.8, 2],
-};
-const FEATURE_KEYS = Object.keys(FEATURE_FILTERS) as FeatureKey[];
-
+/**
+ * Response classes. Primary control (root, arm joints, fingers) is fast and
+ * barely overshoots, so the puppet follows the hand closely; body and head
+ * are a little softer. Even at maximum smoothing the joints stay responsive.
+ */
 function springParams(smoothing: number): Record<RigKey, SpringParams> {
-  const position = { frequency: lerp(18, 7, smoothing), damping: 0.84 };
-  const soft = { frequency: lerp(12, 5.5, smoothing), damping: 1 };
-  // Under-damped arms swing past their target, like loose leather on a pin.
-  const arm = { frequency: lerp(15, 7, smoothing), damping: 0.5 };
+  const s = clamp(smoothing, 0, 1);
+  const root = { frequency: lerp(48, 22, s), damping: 0.9 };
+  const joint = { frequency: lerp(50, 24, s), damping: 0.9 };
+  const fingers = { frequency: lerp(55, 26, s), damping: 0.9 };
+  const soft = { frequency: lerp(14, 6, s), damping: 1 };
   return {
-    x: position,
-    y: position,
+    x: root,
+    y: root,
     scale: soft,
     depth: soft,
-    bodyRotation: { frequency: lerp(16, 7, smoothing), damping: 0.78 },
-    headRotation: { frequency: lerp(13, 6, smoothing), damping: 0.62 },
-    shoulderAngle: arm,
-    elbowAngle: arm,
-    backShoulderAngle: arm,
-    backElbowAngle: arm,
-    wristAngle: { frequency: lerp(17, 8, smoothing), damping: 0.5 },
+    bodyRotation: { frequency: lerp(30, 14, s), damping: 0.82 },
+    headRotation: { frequency: lerp(24, 11, s), damping: 0.72 },
+    shoulderAngle: joint,
+    elbowAngle: joint,
+    backShoulderAngle: joint,
+    backElbowAngle: joint,
+    wristAngle: { frequency: lerp(52, 25, s), damping: 0.88 },
+    frontFingerCurl: fingers,
+    backFingerCurl: fingers,
   };
 }
 
+/** Secondary physics: loose, swingy springs that only ever add offsets on top of the controlled pose. */
+const SECONDARY: SpringParams = { frequency: 11, damping: 0.42 };
+const SECONDARY_KEYS = ['trail', 'fling', 'lean', 'nod'] as const;
+
+const zeros = <K extends string>(keys: readonly K[]) => Object.fromEntries(keys.map((key) => [key, 0])) as Record<K, number>;
+
 /**
- * Owns one puppet's motion: hand features → filtered features → target pose,
- * blended with the idle pose by an engagement factor, then sprung toward
- * smoothly every animation frame.
+ * Owns one puppet's motion. Each hand gets its own controller, so its
+ * filters, velocity, pinch state and springs are fully independent.
+ *
+ *   landmarks → features (filtered per channel) → target pose
+ *     → primary springs (fast) → + secondary physics (loose) → rendered rig
  */
 export class PuppetController {
   readonly side: Side;
+  /** The rendered pose: controlled pose plus secondary physics. */
   readonly rig: PuppetRig;
-  /** Latest filtered features, exposed for the debug panel. */
+  /** Latest filtered features, for the debug panel. */
   features: HandFeatures | null = null;
+  /** Discrete pinch state with hysteresis (debug and accents only). */
+  pinched = false;
+  /** Filtered palm velocity, normalized view units per second. */
+  readonly palmVelocity = { x: 0, y: 0 };
 
-  private readonly target: PuppetRig;
-  private readonly velocity: Record<RigKey, number>;
-  private readonly filters: Record<FeatureKey, OneEuroFilter>;
-  private tracked: PuppetRig | null = null;
+  private readonly control: PuppetRig;
+  private readonly target = emptyRig();
+  private readonly idle = emptyRig();
+  private readonly tracked = emptyRig();
+  private readonly position = { x: 0, y: 0 };
+  private readonly palm = { x: 0.5, y: 0.5, t: 0 };
+  private readonly controlVelocity = zeros(RIG_KEYS);
+  private readonly secondary = zeros(SECONDARY_KEYS);
+  private readonly secondaryVelocity = zeros(SECONDARY_KEYS);
+  private readonly drive = zeros(SECONDARY_KEYS);
+  private readonly filter = new HandFeatureFilter();
+  private hasHand = false;
   private lastSeen = -Infinity;
+  private acquiredAt = -Infinity;
   private engagement = 0;
   private holding = false;
-  /** 1 right after a pickup, decaying to 0: drives the hop-and-wave. */
-  private flourish = 0;
+  private reversing = false;
+  private sensitivity = 0.65;
   private springSmoothing = -1;
   private springs: Record<RigKey, SpringParams> = springParams(0.5);
 
   constructor(side: Side) {
     this.side = side;
     this.rig = idleRig(side, 0, 1);
-    this.target = { ...this.rig };
-    this.velocity = Object.fromEntries(RIG_KEYS.map((key) => [key, 0])) as Record<RigKey, number>;
-    this.filters = Object.fromEntries(
-      FEATURE_KEYS.map((key) => [key, new OneEuroFilter(FEATURE_FILTERS[key][0], FEATURE_FILTERS[key][1])]),
-    ) as Record<FeatureKey, OneEuroFilter>;
+    this.control = { ...this.rig };
+    Object.assign(this.target, this.rig);
   }
 
   isTracking(now: number) {
-    return this.tracked !== null && now - this.lastSeen < GRACE_MS;
+    return this.hasHand && now - this.lastSeen < GRACE_MS;
   }
 
   /** 0 at rest, 1 when fully held: how strongly to light the puppet up. */
@@ -91,36 +111,54 @@ export class PuppetController {
     return smoothstep(this.engagement);
   }
 
-  /** Feeds a newly assigned hand. Returns true when this picks the puppet up from rest. */
-  observe(hand: HandDetection | null, aspect: number, now: number, settings: Settings): boolean {
+  /**
+   * Feeds a newly assigned hand. Every valid result updates the target at
+   * once; `captureTime` (ms) is when the camera took the frame. Returns true
+   * when this picks the puppet up from rest.
+   */
+  observe(hand: HandDetection | null, aspect: number, now: number, settings: Settings, captureTime: number): boolean {
     if (!hand) return false;
-    if (!this.isTracking(now)) {
-      for (const key of FEATURE_KEYS) this.filters[key].reset();
+    const fresh = !this.isTracking(now);
+    if (fresh) {
+      this.filter.reset();
+      this.acquiredAt = now;
+      this.palmVelocity.x = 0;
+      this.palmVelocity.y = 0;
     }
 
-    const raw = extractHandFeatures(hand, aspect);
-    const cutoffScale = lerp(1.8, 0.55, settings.smoothing);
-    const filtered = {} as HandFeatures;
-    for (const key of FEATURE_KEYS) {
-      const filter = this.filters[key];
-      filter.minCutoff = FEATURE_FILTERS[key][0] * cutoffScale;
-      filtered[key] = filter.filter(raw[key], now / 1000);
-    }
+    const features = this.filter.filter(extractHandFeatures(hand, aspect), captureTime / 1000, settings.smoothing);
 
-    this.features = filtered;
-    this.tracked = rigFromHand(filtered, this.side, settings.sensitivity);
+    if (!fresh) {
+      const dt = (captureTime - this.palm.t) / 1000;
+      if (dt > 0.004) {
+        const vx = (features.palmX - this.palm.x) / dt;
+        const vy = (features.palmY - this.palm.y) / dt;
+        this.reversing = vx * this.palmVelocity.x + vy * this.palmVelocity.y < 0;
+        this.palmVelocity.x += (vx - this.palmVelocity.x) * 0.5;
+        this.palmVelocity.y += (vy - this.palmVelocity.y) * 0.5;
+      }
+    }
+    this.palm.x = features.palmX;
+    this.palm.y = features.palmY;
+    this.palm.t = captureTime;
+
+    this.features = features;
+    this.pinched = this.filter.pinched;
+    this.sensitivity = settings.sensitivity;
+    articulateFromHand(features, this.side, this.tracked);
     this.lastSeen = now;
+    this.hasHand = true;
 
     const pickedUp = !this.holding;
     this.holding = true;
-    if (pickedUp) this.flourish = 1;
+    // A tiny physical acknowledgement of the pickup, on the secondary layer only.
+    if (pickedUp) this.secondaryVelocity.fling -= 90;
     return pickedUp;
   }
 
   /**
-   * First half of a frame: computes this frame's target pose (idle/hand blend
-   * plus secondary motion). The caller may adjust it, e.g. to keep the two
-   * puppets apart, before calling `integrate`.
+   * First half of a frame: this frame's target pose. The caller may adjust it,
+   * e.g. to keep the two puppets apart, before calling `integrate`.
    */
   prepareTarget(now: number, dt: number, idleAmplitude: number): PuppetRig {
     const tracking = this.isTracking(now);
@@ -129,47 +167,60 @@ export class PuppetController {
       ? Math.min(1, this.engagement + PICKUP_RATE * dt)
       : Math.max(0, this.engagement - RELEASE_RATE * dt);
 
-    const idle = idleRig(this.side, now / 1000, idleAmplitude);
-    const target =
-      this.tracked && this.engagement > 0
-        ? blendRig(idle, this.tracked, smoothstep(this.engagement), this.target)
-        : Object.assign(this.target, idle);
-
-    // Secondary motion: the body leans into travel, loose arms trail behind it
-    // sideways and fling when the puppet is raised or dropped quickly, the head
-    // tips with vertical moves, and hanging arms partly resist the lean.
-    const forwardSpeed = facing(this.side) * this.velocity.x;
-    const trail = clamp(-forwardSpeed * 0.06, -32, 32);
-    const fling = clamp(this.velocity.y * 0.045, -24, 24);
-    target.bodyRotation += clamp(forwardSpeed * 0.012, -7, 7);
-    target.headRotation += clamp(this.velocity.y * 0.02, -8, 8);
-    target.shoulderAngle += trail * 0.8 + fling + target.bodyRotation * 0.4;
-    target.backShoulderAngle += trail + fling * 0.8 + target.bodyRotation * 0.4;
-    target.elbowAngle += trail * 0.4 + fling * 0.5;
-    target.backElbowAngle += trail * 0.4 + fling * 0.5;
-
-    // Pickup flourish: a small hop with a raised-arm greeting, then settle.
-    if (this.flourish > 0) {
-      this.flourish = Math.max(0, this.flourish - FLOURISH_RATE * dt);
-      const bump = Math.sin(Math.PI * (1 - this.flourish));
-      target.y -= 26 * bump;
-      target.shoulderAngle += 30 * bump;
-      target.backShoulderAngle += 18 * bump;
-      target.headRotation -= 5 * bump;
+    idleRig(this.side, now / 1000, idleAmplitude, this.idle);
+    const target = this.target;
+    if (this.hasHand && this.engagement > 0) {
+      let horizon = clamp(now - this.palm.t, 0, PREDICT_MAX_MS) / 1000;
+      if (now - this.acquiredAt < PREDICT_WARMUP_MS || this.reversing) horizon = 0;
+      const px = this.palm.x + clamp(this.palmVelocity.x * horizon, -PREDICT_MAX_SHIFT, PREDICT_MAX_SHIFT);
+      const py = this.palm.y + clamp(this.palmVelocity.y * horizon, -PREDICT_MAX_SHIFT, PREDICT_MAX_SHIFT);
+      stagePosition(px, py, this.side, this.sensitivity, this.position);
+      this.tracked.x = this.position.x;
+      this.tracked.y = this.position.y;
+      blendRig(this.idle, this.tracked, smoothstep(this.engagement), target);
+    } else {
+      Object.assign(target, this.idle);
     }
+
+    // Hanging arms partly resist the lean, as gravity would.
+    target.shoulderAngle += target.bodyRotation * 0.4;
+    target.backShoulderAngle += target.bodyRotation * 0.4;
     return target;
   }
 
-  /** Second half of a frame: springs the rendered pose toward the prepared target. */
+  /** Second half of a frame: primary springs, then secondary physics layered on top. */
   integrate(dt: number, settings: Settings): PuppetRig {
-    const target = this.target;
     if (settings.smoothing !== this.springSmoothing) {
       this.springSmoothing = settings.smoothing;
       this.springs = springParams(settings.smoothing);
     }
+    const control = this.control;
+    const target = this.target;
     for (const key of RIG_KEYS) {
-      this.rig[key] = stepSpring(this.rig[key], target[key], this.velocity, key, this.springs[key], dt);
+      control[key] = stepSpring(control[key], target[key], this.controlVelocity, key, this.springs[key], dt);
     }
-    return this.rig;
+
+    // Secondary physics is driven by how fast the controlled puppet travels:
+    // loose arms trail sideways moves and fling on lifts, the body leans into
+    // travel and the head nods with vertical motion.
+    const forwardSpeed = facing(this.side) * this.controlVelocity.x;
+    const verticalSpeed = this.controlVelocity.y;
+    this.drive.trail = clamp(-forwardSpeed * 0.05, -26, 26);
+    this.drive.fling = clamp(verticalSpeed * 0.04, -22, 22);
+    this.drive.lean = clamp(forwardSpeed * 0.01, -6, 6);
+    this.drive.nod = clamp(verticalSpeed * 0.015, -6, 6);
+    for (const key of SECONDARY_KEYS) {
+      this.secondary[key] = stepSpring(this.secondary[key], this.drive[key], this.secondaryVelocity, key, SECONDARY, dt);
+    }
+
+    const { trail, fling, lean, nod } = this.secondary;
+    const rig = Object.assign(this.rig, control);
+    rig.shoulderAngle += trail * 0.8 + fling;
+    rig.backShoulderAngle += trail + fling * 0.8;
+    rig.elbowAngle += trail * 0.4 + fling * 0.5;
+    rig.backElbowAngle += trail * 0.4 + fling * 0.5;
+    rig.bodyRotation += lean;
+    rig.headRotation += nod;
+    return rig;
   }
 }

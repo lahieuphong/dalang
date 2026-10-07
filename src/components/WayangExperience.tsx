@@ -12,7 +12,8 @@ import { PuppetController } from '../lib/puppetMotion';
 import { readDebugFlags } from '../lib/settings';
 import { HandSimulator } from '../lib/simulatedHands';
 import { stageStatus } from '../lib/status';
-import { SIDES, type AssignedHands, type HandFrame, type Side } from '../types';
+import type { HandTracker } from '../lib/handTracker';
+import { FINGER_NAMES, SIDES, type AssignedHands, type HandFrame, type Side } from '../types';
 import { Backdrop } from './Backdrop';
 import { DebugPanel, type DebugPanelHandle } from './DebugPanel';
 import type { HandOverlayHandle } from './HandOverlay';
@@ -141,16 +142,22 @@ export function WayangExperience() {
     const { settings, cameraActive, reducedMotion, soundOn } = live.current;
     const video = camera.videoRef.current;
 
+    // The tracker runs inference on fresh camera frames by itself; here we only pick up the newest result.
+    const tracker = tracking.trackerRef.current;
     let frame: HandFrame | null = null;
     if (engine.simulator) frame = engine.simulator.next(now);
-    else if (cameraActive && video) frame = tracking.trackerRef.current?.process(video, now, settings.mirror) ?? null;
+    else if (tracker && cameraActive && video) {
+      tracker.mirror = settings.mirror;
+      tracker.attach(video);
+      frame = tracker.take(now);
+    } else tracker?.detach();
 
     if (frame) {
       engine.frame = frame;
       engine.frameAt = now;
       engine.assigned = engine.assigner.assign(frame.hands, now);
       for (const side of SIDES) {
-        const pickedUp = engine.puppets[side].observe(engine.assigned[side], frame.aspect, now, settings);
+        const pickedUp = engine.puppets[side].observe(engine.assigned[side], frame.aspect, now, settings, frame.time);
         if (pickedUp && soundOn) audioRef.current?.knock(side);
       }
       if (settings.showLandmarks) overlayRef.current?.draw(frame, engine.assigned, video);
@@ -167,7 +174,7 @@ export function WayangExperience() {
     }
 
     // Tell React which puppets are held only once that settles.
-    const heldKey = SIDES.map((side) => (engine.puppets[side].isTracking(now) ? side[0] : '-')).join('');
+    const heldKey = (engine.puppets.left.isTracking(now) ? 'l' : '-') + (engine.puppets.right.isTracking(now) ? 'r' : '-');
     const report = engine.held;
     if (heldKey !== report.pending) {
       report.pending = heldKey;
@@ -179,7 +186,7 @@ export function WayangExperience() {
 
     if (flags.debug) {
       debugRef.current?.update(now, () =>
-        describeDebug(engine, now, engine.simulator ? 'simulated' : `camera · ${tracking.trackerRef.current?.fps.toFixed(1) ?? '–'} fps`),
+        describeDebug(engine, now, engine.simulator ? null : tracker, video, camera.trackSettingsRef.current),
       );
     }
   });
@@ -227,29 +234,52 @@ export function WayangExperience() {
   );
 }
 
-function describeDebug(engine: Engine, now: number, source: string): string {
-  const fixed = (n: number | undefined, digits = 2) => (n === undefined ? '–' : n.toFixed(digits));
-  const lines = [`source  ${source}`];
+const BAR_WIDTH = 14;
+const bar = (value: number) => {
+  const filled = Math.round(Math.min(1, Math.max(0, value)) * BAR_WIDTH);
+  return '█'.repeat(filled) + '░'.repeat(BAR_WIDTH - filled);
+};
+
+/** Engineering readout for `?debug=1`: pipeline timing, assignment and every finger channel as a bar. */
+function describeDebug(
+  engine: Engine,
+  now: number,
+  tracker: HandTracker | null,
+  video: HTMLVideoElement | null,
+  track: MediaTrackSettings | null,
+): string {
+  const fixed = (n: number | undefined, digits = 2) => (n === undefined || !Number.isFinite(n) ? '–' : n.toFixed(digits));
+  const lines: string[] = [];
+  if (tracker) {
+    const { cameraFps, inferenceFps, inferenceMs } = tracker.stats;
+    const age = engine.frame ? now - engine.frame.time : NaN;
+    lines.push(
+      `camera   ${video?.videoWidth ?? '–'}×${video?.videoHeight ?? '–'}  ${fixed(cameraFps, 1)} fps (track ${fixed(track?.frameRate, 0)})`,
+      `infer    ${fixed(inferenceFps, 1)} fps  ${fixed(inferenceMs, 1)} ms  input age ${fixed(age, 0)} ms`,
+    );
+  } else {
+    lines.push('source   simulated hands');
+  }
   engine.frame?.hands.forEach((hand, i) => {
     const slot = hand === engine.assigned.left ? 'L' : hand === engine.assigned.right ? 'R' : '·';
     const palm = palmCenter(hand.landmarks);
-    lines.push(
-      `hand ${i}  ${hand.handedness ?? '?'} ${fixed(hand.handednessScore)} → ${slot}   xy ${fixed(palm.x)},${fixed(palm.y)}`,
-    );
+    lines.push(`hand ${i}   ${hand.handedness ?? '?'} ${fixed(hand.handednessScore)} → ${slot}   xy ${fixed(palm.x)},${fixed(palm.y)}`);
   });
-  const slots = engine.assigner.debugState(now);
   for (const side of SIDES) {
     const puppet = engine.puppets[side];
     const f = puppet.features;
-    const s = slots[side];
-    lines.push(
-      `${side.padEnd(5)}  ${puppet.isTracking(now) ? 'held ' : 'rest '} age ${s.ageMs === Infinity ? '∞' : Math.round(s.ageMs)}ms  palm ${fixed(s.palm?.x)},${fixed(s.palm?.y)}`,
-    );
-    if (f) {
-      lines.push(
-        `       idx ${fixed(f.indexExtension)} open ${fixed(f.openness)} pinch ${fixed(f.pinch)} tilt ${fixed(f.tilt, 0)}° size ${fixed(f.size)}`,
-      );
+    lines.push('', `${side.toUpperCase()} puppet  ${puppet.isTracking(now) ? 'held' : 'rest'}`);
+    if (!f || !puppet.isTracking(now)) continue;
+    for (const finger of FINGER_NAMES) {
+      const { extension, curl } = f[finger];
+      lines.push(`  ${finger.padEnd(6)} ${bar(extension)} ${fixed(extension)}  curl ${fixed(curl)}`);
     }
+    lines.push(
+      `  pinch  ${bar(f.pinchStrength)} ${fixed(f.pinchStrength)}  ${puppet.pinched ? 'PINCHED' : ''}`,
+      `  fist   ${bar(f.fistStrength)} ${fixed(f.fistStrength)}`,
+      `  roll ${fixed(f.roll, 0)}°  pitch ${fixed(f.pitch, 0)}°  yaw ${fixed(f.yaw, 0)}°  size ${fixed(f.size)}`,
+      `  palm ${fixed(f.palmX)},${fixed(f.palmY)}  v ${fixed(puppet.palmVelocity.x)},${fixed(puppet.palmVelocity.y)}/s`,
+    );
   }
   return lines.join('\n');
 }
