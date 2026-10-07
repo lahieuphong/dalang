@@ -22,3 +22,6 @@ dist-ssr
 
 # MediaPipe wasm runtime is copied from node_modules by scripts/setup-mediapipe.mjs
 public/mediapipe/
+
+# Packaged production upload (see DEPLOY.md)
+release/
